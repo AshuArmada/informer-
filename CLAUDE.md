@@ -24,7 +24,7 @@ No login. Read-only toward GitHub (never writes back issues/PRs/comments). No ot
 - **Reports cover the user's own repos/orgs** (not arbitrary public repos) — this is why the PAT needs `repo` scope (classic) or Metadata/Issues/Pull requests/Contents read (fine-grained), not just public access.
 - **Email is sent via the user's own SMTP account** (e.g. Gmail app password), not a third-party transactional API. SMTP credentials stay in `.env` (not moved into Settings UI — deliberate scope cut, only the PAT got in-app management).
 - **The GitHub issues endpoint returns PRs too** — `report_generator.py` must filter out entries with a `pull_request` field when computing issue-only assignee groupings.
-- **No automated test suite planned for v1** (single-user personal tool) — verification is manual, per the plan file's Verification section.
+- **No comprehensive automated test suite planned for v1** (single-user personal tool) — verification is primarily manual, per the plan file's Verification section. A minimal `backend/tests/` (pytest) exists for logic worth locking down in code (e.g. the PAT encryption round-trip in `test_security.py`) — run with `./.venv/Scripts/python -m pytest` from `backend/`. Don't feel obligated to chase full coverage; add tests where a regression would be easy to introduce silently.
 
 ## Data model (Postgres, Alembic-managed)
 
