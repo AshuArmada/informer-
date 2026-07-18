@@ -1,15 +1,17 @@
 import { useState } from 'react'
-import { Sparkles, Mail, Settings as SettingsIcon, TrendingUp } from 'lucide-react'
+import { Sparkles, Mail, Settings as SettingsIcon, TrendingUp, Bookmark } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { SettingsPage } from '@/features/settings/SettingsPage'
 import { TrendingPage } from '@/features/trending/TrendingPage'
 import { ReportsPage } from '@/features/reports/ReportsPage'
+import { SavedPage } from '@/features/saved/SavedPage'
 
-type View = 'trending' | 'reports' | 'settings'
+type View = 'trending' | 'saved' | 'reports' | 'settings'
 
 const NAV_ITEMS: { id: View; label: string; icon: typeof Sparkles }[] = [
   { id: 'trending', label: 'Trending', icon: TrendingUp },
+  { id: 'saved', label: 'Saved', icon: Bookmark },
   { id: 'reports', label: 'Reports', icon: Mail },
   { id: 'settings', label: 'Settings', icon: SettingsIcon },
 ]
@@ -52,6 +54,7 @@ function App() {
 
       <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col">
         {view === 'trending' && <TrendingPage />}
+        {view === 'saved' && <SavedPage />}
         {view === 'reports' && <ReportsPage />}
         {view === 'settings' && <SettingsPage />}
       </main>

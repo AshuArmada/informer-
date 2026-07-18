@@ -27,6 +27,17 @@ class TrendingResponse(BaseModel):
     repos: list[TrendingRepo]
 
 
+# --- Saved repos ---
+
+
+class SavedRepo(BaseModel):
+    repo_full_name: str
+    description: str | None
+    language: str | None
+    html_url: str
+    stars: int
+
+
 # --- Reports ---
 
 

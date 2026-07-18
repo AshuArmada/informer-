@@ -20,6 +20,14 @@ export interface TrendingResponse {
   repos: TrendingRepo[]
 }
 
+export interface SavedRepo {
+  repo_full_name: string
+  description: string | null
+  language: string | null
+  html_url: string
+  stars: number
+}
+
 export interface GitHubRepo {
   full_name: string
   owner: string
@@ -100,6 +108,16 @@ export const api = {
   validateSettings: () =>
     request<SettingsStatus>('/settings/validate', { method: 'POST' }),
   getTrending: () => request<TrendingResponse>('/trending'),
+
+  // Saved repos
+  getSaved: () => request<SavedRepo[]>('/saved'),
+  saveRepo: (repo: SavedRepo) =>
+    request<SavedRepo[]>('/saved', { method: 'POST', body: JSON.stringify(repo) }),
+  unsaveRepo: (repo_full_name: string) =>
+    request<{ removed: string }>(
+      `/saved?repo_full_name=${encodeURIComponent(repo_full_name)}`,
+      { method: 'DELETE' },
+    ),
 
   // Reports
   getRepos: () => request<GitHubRepo[]>('/repos'),

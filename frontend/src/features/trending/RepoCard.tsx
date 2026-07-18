@@ -1,7 +1,8 @@
-import { ArrowUp, ArrowDown, Minus, Star } from 'lucide-react'
+import { useState } from 'react'
+import { ArrowUp, ArrowDown, Minus, Star, Bookmark } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { languageColor } from '@/lib/languageColors'
-import type { TrendingRepo } from '@/lib/api'
+import { api, type TrendingRepo } from '@/lib/api'
 
 function DeltaPill({ delta }: { delta: number | null }) {
   if (delta === null) {
@@ -34,30 +35,62 @@ function DeltaPill({ delta }: { delta: number | null }) {
   )
 }
 
-export function RepoCard({ repo, rank }: { repo: TrendingRepo; rank: number }) {
+export function RepoCard({
+  repo,
+  rank,
+  onSaved,
+}: {
+  repo: TrendingRepo
+  rank: number
+  onSaved: (fullName: string) => void
+}) {
   const [owner, name] = repo.repo_full_name.split('/')
+  const [saving, setSaving] = useState(false)
+
+  const save = async () => {
+    setSaving(true)
+    try {
+      await api.saveRepo({
+        repo_full_name: repo.repo_full_name,
+        description: repo.description,
+        language: repo.language,
+        html_url: repo.html_url,
+        stars: repo.stars,
+      })
+      onSaved(repo.repo_full_name) // parent removes it from the trending list
+    } catch {
+      setSaving(false) // leave the card in place if it failed
+    }
+  }
 
   return (
-    <a
-      href={repo.html_url}
-      target="_blank"
-      rel="noreferrer"
-      className={cn(
-        'group flex h-full flex-col gap-3 rounded-xl border bg-card p-4 transition-all',
-        'hover:border-brand/40 hover:shadow-sm',
-      )}
-    >
+    <div className="group relative flex h-full flex-col gap-3 rounded-xl border bg-card p-4 transition-all hover:border-brand/40 hover:shadow-sm">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold tabular-nums text-muted-foreground/60">
-          #{rank}
-        </span>
-        <DeltaPill delta={repo.star_delta} />
+        <span className="text-xs font-semibold tabular-nums text-muted-foreground/60">#{rank}</span>
+        <div className="flex items-center gap-2">
+          <DeltaPill delta={repo.star_delta} />
+          <button
+            onClick={save}
+            disabled={saving}
+            aria-label={`Save ${repo.repo_full_name}`}
+            title="Save to your dashboard"
+            className="relative z-10 flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-brand"
+          >
+            <Bookmark className={cn('size-4', saving && 'animate-pulse')} />
+          </button>
+        </div>
       </div>
 
-      <div className="min-w-0 truncate text-[15px] font-medium">
+      {/* Stretched link: makes the whole card open the repo, while the save button (z-10) stays clickable. */}
+      <a
+        href={repo.html_url}
+        target="_blank"
+        rel="noreferrer"
+        className="min-w-0 truncate text-[15px] font-medium after:absolute after:inset-0"
+      >
         <span className="text-muted-foreground">{owner}/</span>
         <span className="text-foreground group-hover:text-brand">{name}</span>
-      </div>
+      </a>
 
       {repo.description && (
         <p className="line-clamp-3 flex-1 text-sm text-muted-foreground">{repo.description}</p>
@@ -78,6 +111,6 @@ export function RepoCard({ repo, rank }: { repo: TrendingRepo; rank: number }) {
           {repo.stars.toLocaleString()}
         </span>
       </div>
-    </a>
+    </div>
   )
 }

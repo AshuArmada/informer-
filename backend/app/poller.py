@@ -9,6 +9,7 @@ from sqlalchemy import select
 from app.db import async_session_factory
 from app.github import GitHubClient, GitHubTokenNotConfigured, get_github_client
 from app.models import Snapshot
+from app.saved_store import get_saved_names
 
 logger = logging.getLogger("informer.poller")
 
@@ -29,10 +30,14 @@ class TrendingCache:
         self.error: str | None = None
 
     def snapshot(self) -> dict:
+        # Saved (bookmarked) repos are excluded from the trending feed at read time,
+        # so saving one takes effect immediately without waiting for the next poll.
+        saved = get_saved_names()
+        repos = [e for e in self.entries if e["repo_full_name"] not in saved]
         return {
             "updated_at": self.last_updated.isoformat() if self.last_updated else None,
             "error": self.error,
-            "repos": self.entries,
+            "repos": repos,
         }
 
 

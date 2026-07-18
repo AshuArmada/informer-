@@ -35,6 +35,20 @@ class Snapshot(Base):
     )
 
 
+class SavedRepo(Base):
+    """A repo bookmarked from the trending feed. Saved repos are excluded from trending."""
+
+    __tablename__ = "saved_repos"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    repo_full_name: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    language: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    html_url: Mapped[str] = mapped_column(String(500))
+    stars: Mapped[int] = mapped_column(Integer, default=0)
+    saved_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class TrackedRepo(Base):
     __tablename__ = "tracked_repos"
 

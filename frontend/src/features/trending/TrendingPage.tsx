@@ -55,6 +55,13 @@ export function TrendingPage() {
       .catch((err: Error) => setLoadError(err.message))
   }, [])
 
+  const handleSaved = (fullName: string) => {
+    // Saved repos are excluded from trending; drop it from the list immediately.
+    setData((prev) =>
+      prev ? { ...prev, repos: prev.repos.filter((r) => r.repo_full_name !== fullName) } : prev,
+    )
+  }
+
   return (
     <div className="flex w-full flex-col gap-6 px-4 py-8 sm:px-6">
       <PageHeader
@@ -95,7 +102,7 @@ export function TrendingPage() {
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {data?.repos.map((repo, i) => (
-          <RepoCard key={repo.repo_full_name} repo={repo} rank={i + 1} />
+          <RepoCard key={repo.repo_full_name} repo={repo} rank={i + 1} onSaved={handleSaved} />
         ))}
       </div>
     </div>

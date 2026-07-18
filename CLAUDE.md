@@ -1,11 +1,14 @@
 # Informer
 
-A personal, local-only, single-user dashboard with two features:
+A personal, local-only, single-user dashboard:
 
 1. **Trending feed** — GitHub trending repos, ranked by star velocity, updating live via SSE.
-2. **Repo issue/PR reports** — for repos you track, shows open issues grouped by assignee + PR counts, emailed on demand or on a schedule.
+2. **Saved repos** — bookmark repos from the trending feed; saved repos are excluded from the trending feed and shown in a dedicated Saved view.
+3. **Repo issue/PR reports** — for repos you track, shows open issues grouped by assignee + PR counts, emailed on demand or on a schedule.
 
 No login. Read-only toward GitHub (never writes back issues/PRs/comments). No other data sources in v1.
+
+Note: **saved repos** (bookmarks from trending) and **tracked repos** (which repos appear in issue/PR reports) are two independent concepts with separate tables — don't conflate them.
 
 ## Stack
 
@@ -30,6 +33,7 @@ No login. Read-only toward GitHub (never writes back issues/PRs/comments). No ot
 
 - `app_settings` — single row: encrypted GitHub PAT, cached GitHub login, updated_at.
 - `snapshots` — trending history: repo_full_name, stars, description, language, html_url, captured_at. Ranking computed at read time from each repo's latest two snapshots.
+- `saved_repos` — bookmarked-from-trending repos: repo_full_name (unique), description, language, html_url, stars, saved_at. Excluded from the trending feed. Mirrored into an in-memory set (`saved_store.py`) so `TrendingCache.snapshot()` can filter without a DB hit per read/broadcast; the set is loaded at startup and kept in sync by the saved router.
 - `tracked_repos` — owner, name, added_at (which repos are included in reports).
 - `report_schedule` — single row: enabled, cadence (daily|weekly), time, day_of_week, email.
 - `report_log` — sent_at, email, repo_count, status (audit trail for unattended scheduled sends).
@@ -37,7 +41,8 @@ No login. Read-only toward GitHub (never writes back issues/PRs/comments). No ot
 ## API surface
 
 - `GET/PUT /api/settings`, `POST /api/settings/validate` — PAT management.
-- `GET /api/trending`, `GET /api/stream` (SSE) — trending feed.
+- `GET /api/trending`, `GET /api/stream` (SSE) — trending feed (excludes saved repos).
+- `GET/POST/DELETE /api/saved` — bookmark repos from trending.
 - `GET /api/repos`, plus tracked-repo CRUD — repo picker for reports.
 - `GET /api/report` (preview), `POST /api/report/send`, schedule CRUD — reports.
 
@@ -65,7 +70,7 @@ informer/
     .env.example
   frontend/
     src/
-      App.tsx                 # nav: Trending | Reports | Settings
+      App.tsx                 # nav: Trending | Saved | Reports | Settings
       lib/api.ts
       components/ui/...       # shadcn primitives
       features/
@@ -82,7 +87,7 @@ Other feed sources (HN/npm/PyPI/CVEs), trending filter/search, bookmarking, auth
 
 ## Build status
 
-- **Done:** Foundation scaffold, Settings/PAT (encrypted token, validate against `GET /user`), Trending feed (poller with star-velocity ranking, `/api/trending`, `/api/stream` SSE, frontend grid of cards with live badge + delta pills + language colors), Reports (tracked-repo picker + CRUD, `report_generator.py` issues-by-assignee + PR counts, `mailer.py` + Jinja2 email template, on-demand send, APScheduler digest via `scheduler.py`, full Reports UI).
+- **Done:** Foundation scaffold, Settings/PAT (encrypted token, validate against `GET /user`), Trending feed (poller with star-velocity ranking, `/api/trending`, `/api/stream` SSE, frontend grid of cards with live badge + delta pills + language colors), Saved repos (bookmark from trending, excluded from feed, dedicated Saved view), Reports (tracked-repo picker + CRUD, `report_generator.py` issues-by-assignee + PR counts, `mailer.py` + Jinja2 email template, on-demand send, APScheduler digest via `scheduler.py`, full Reports UI).
 - **v1 feature-complete.** Remaining work is polish/backlog.
 - **Known limitation:** `report_generator.py` fetches *all* open issues + *all* PRs per tracked repo (full pagination). Fine for the intended use (your own repos), but tracking a huge public repo makes the report slow/large. Backlog: cap issues shown + use the Search API for cheap accurate counts.
 
