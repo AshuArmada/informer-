@@ -5,6 +5,21 @@ export interface SettingsStatus {
   masked_hint: string | null
 }
 
+export interface TrendingRepo {
+  repo_full_name: string
+  stars: number
+  star_delta: number | null
+  description: string | null
+  language: string | null
+  html_url: string
+}
+
+export interface TrendingResponse {
+  updated_at: string | null
+  error: string | null
+  repos: TrendingRepo[]
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api${path}`, {
     headers: { 'Content-Type': 'application/json' },
@@ -27,4 +42,5 @@ export const api = {
     }),
   validateSettings: () =>
     request<SettingsStatus>('/settings/validate', { method: 'POST' }),
+  getTrending: () => request<TrendingResponse>('/trending'),
 }

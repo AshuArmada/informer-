@@ -80,6 +80,11 @@ informer/
 
 Other feed sources (HN/npm/PyPI/CVEs), trending filter/search, bookmarking, auth/multi-user, containerizing backend/frontend + cloud deploy, writing back to GitHub, SMTP creds in Settings UI, rich report-history UI beyond `report_log`.
 
+## Build status
+
+- **Done:** Foundation scaffold, Settings/PAT (encrypted token, validate against `GET /user`), Trending feed (poller with star-velocity ranking, `/api/trending`, `/api/stream` SSE, frontend view with live badge + delta pills + light/dark theming).
+- **Not built yet:** Repo issue/PR reports (tracked repos, report generation, email send/schedule) — the "Reports" nav tab is currently a placeholder.
+
 ## Full plan
 
 The detailed milestone-by-milestone build plan lives at `C:\Users\Homework\.claude\plans\curious-inventing-milner.md` (outside this repo, in Claude Code's plan storage — not guaranteed to persist across machines, so the essentials above are duplicated here).
