@@ -82,8 +82,9 @@ Other feed sources (HN/npm/PyPI/CVEs), trending filter/search, bookmarking, auth
 
 ## Build status
 
-- **Done:** Foundation scaffold, Settings/PAT (encrypted token, validate against `GET /user`), Trending feed (poller with star-velocity ranking, `/api/trending`, `/api/stream` SSE, frontend view with live badge + delta pills + light/dark theming).
-- **Not built yet:** Repo issue/PR reports (tracked repos, report generation, email send/schedule) — the "Reports" nav tab is currently a placeholder.
+- **Done:** Foundation scaffold, Settings/PAT (encrypted token, validate against `GET /user`), Trending feed (poller with star-velocity ranking, `/api/trending`, `/api/stream` SSE, frontend grid of cards with live badge + delta pills + language colors), Reports (tracked-repo picker + CRUD, `report_generator.py` issues-by-assignee + PR counts, `mailer.py` + Jinja2 email template, on-demand send, APScheduler digest via `scheduler.py`, full Reports UI).
+- **v1 feature-complete.** Remaining work is polish/backlog.
+- **Known limitation:** `report_generator.py` fetches *all* open issues + *all* PRs per tracked repo (full pagination). Fine for the intended use (your own repos), but tracking a huge public repo makes the report slow/large. Backlog: cap issues shown + use the Search API for cheap accurate counts.
 
 ## Full plan
 

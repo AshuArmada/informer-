@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { SettingsPage } from '@/features/settings/SettingsPage'
 import { TrendingPage } from '@/features/trending/TrendingPage'
+import { ReportsPage } from '@/features/reports/ReportsPage'
 
 type View = 'trending' | 'reports' | 'settings'
 
@@ -12,22 +13,6 @@ const NAV_ITEMS: { id: View; label: string; icon: typeof Sparkles }[] = [
   { id: 'reports', label: 'Reports', icon: Mail },
   { id: 'settings', label: 'Settings', icon: SettingsIcon },
 ]
-
-function ComingSoon({ title, icon: Icon }: { title: string; icon: typeof Sparkles }) {
-  return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-4 p-6 text-center">
-      <div className="flex size-14 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
-        <Icon className="size-6" />
-      </div>
-      <div className="flex flex-col gap-1">
-        <h2 className="text-lg font-medium">{title}</h2>
-        <p className="max-w-sm text-sm text-muted-foreground">
-          Not built yet — this view lands in a later milestone.
-        </p>
-      </div>
-    </div>
-  )
-}
 
 function App() {
   const [view, setView] = useState<View>('trending')
@@ -67,7 +52,7 @@ function App() {
 
       <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col">
         {view === 'trending' && <TrendingPage />}
-        {view === 'reports' && <ComingSoon title="Repo issue/PR reports" icon={Mail} />}
+        {view === 'reports' && <ReportsPage />}
         {view === 'settings' && <SettingsPage />}
       </main>
     </div>

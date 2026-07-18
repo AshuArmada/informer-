@@ -1,0 +1,59 @@
+<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#18181b;">
+    <div style="max-width:640px;margin:0 auto;padding:24px;">
+      <h1 style="font-size:20px;font-weight:600;margin:0 0 4px;">Informer report</h1>
+      <p style="margin:0 0 24px;color:#71717a;font-size:13px;">
+        Generated {{ report.generated_at }}
+      </p>
+
+      {% if not report.repos %}
+        <p style="color:#71717a;">No repositories are being tracked yet.</p>
+      {% endif %}
+
+      {% for repo in report.repos %}
+        <div style="background:#ffffff;border:1px solid #e4e4e7;border-radius:10px;padding:16px;margin-bottom:16px;">
+          <a href="{{ repo.html_url }}" style="font-size:15px;font-weight:600;color:#4f46e5;text-decoration:none;">
+            {{ repo.full_name }}
+          </a>
+
+          {% if repo.error %}
+            <p style="color:#dc2626;font-size:13px;margin:8px 0 0;">{{ repo.error }}</p>
+          {% else %}
+            <p style="margin:4px 0 12px;font-size:13px;color:#71717a;">
+              {{ repo.open_issue_count }} open issue{{ '' if repo.open_issue_count == 1 else 's' }}
+              &nbsp;·&nbsp;
+              PRs: {{ repo.pr_counts.open }} open / {{ repo.pr_counts.merged }} merged / {{ repo.pr_counts.closed }} closed
+            </p>
+
+            {% for group in repo.groups %}
+              <div style="margin-bottom:10px;">
+                <div style="font-size:13px;font-weight:600;margin-bottom:4px;">
+                  {{ group.assignee if group.assignee else 'Unassigned' }}
+                  <span style="color:#a1a1aa;font-weight:400;">({{ group.count }})</span>
+                </div>
+                <ul style="margin:0;padding-left:18px;">
+                  {% for issue in group.issues %}
+                    <li style="font-size:13px;margin-bottom:2px;">
+                      <a href="{{ issue.html_url }}" style="color:#3f3f46;text-decoration:none;">
+                        #{{ issue.number }} {{ issue.title }}
+                      </a>
+                    </li>
+                  {% endfor %}
+                </ul>
+              </div>
+            {% endfor %}
+
+            {% if not repo.groups %}
+              <p style="font-size:13px;color:#71717a;margin:0;">No open issues 🎉</p>
+            {% endif %}
+          {% endif %}
+        </div>
+      {% endfor %}
+
+      <p style="color:#a1a1aa;font-size:12px;text-align:center;margin-top:24px;">
+        Sent by Informer
+      </p>
+    </div>
+  </body>
+</html>
