@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { Sparkles, Mail, Settings as SettingsIcon, TrendingUp, Bookmark } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ThemeToggle } from '@/components/ThemeToggle'
@@ -6,8 +5,7 @@ import { SettingsPage } from '@/features/settings/SettingsPage'
 import { TrendingPage } from '@/features/trending/TrendingPage'
 import { ReportsPage } from '@/features/reports/ReportsPage'
 import { SavedPage } from '@/features/saved/SavedPage'
-
-type View = 'trending' | 'saved' | 'reports' | 'settings'
+import { useHashRoute, type View } from '@/hooks/useHashRoute'
 
 const NAV_ITEMS: { id: View; label: string; icon: typeof Sparkles }[] = [
   { id: 'trending', label: 'Trending', icon: TrendingUp },
@@ -17,7 +15,7 @@ const NAV_ITEMS: { id: View; label: string; icon: typeof Sparkles }[] = [
 ]
 
 function App() {
-  const [view, setView] = useState<View>('trending')
+  const [view, navigate] = useHashRoute()
 
   return (
     <div className="flex min-h-svh flex-col bg-background text-foreground">
@@ -34,7 +32,7 @@ function App() {
             {NAV_ITEMS.map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
-                onClick={() => setView(id)}
+                onClick={() => navigate(id)}
                 className={cn(
                   'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors',
                   view === id

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { ArrowUp, ArrowDown, Minus, Star, Bookmark } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { languageColor } from '@/lib/languageColors'
-import { api, type TrendingRepo } from '@/lib/api'
+import { type TrendingRepo } from '@/lib/api'
 
 function DeltaPill({ delta }: { delta: number | null }) {
   if (delta === null) {
@@ -35,38 +35,55 @@ function DeltaPill({ delta }: { delta: number | null }) {
   )
 }
 
+/** Movement in trending rank since the last feed update. Positive = climbed. */
+function RankChange({ delta }: { delta: number | null }) {
+  if (!delta) return null
+  const up = delta > 0
+  return (
+    <span
+      title={up ? `Up ${delta} since last update` : `Down ${Math.abs(delta)} since last update`}
+      className={cn(
+        'flex items-center gap-0.5 text-[10px] font-bold tabular-nums transition-colors',
+        up ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400',
+      )}
+    >
+      {up ? (
+        <ArrowUp className="size-2.5" strokeWidth={3} />
+      ) : (
+        <ArrowDown className="size-2.5" strokeWidth={3} />
+      )}
+      {Math.abs(delta)}
+    </span>
+  )
+}
+
 export function RepoCard({
   repo,
   rank,
-  onSaved,
+  rankDelta,
+  onSave,
 }: {
   repo: TrendingRepo
   rank: number
-  onSaved: (fullName: string) => void
+  rankDelta: number | null
+  onSave: () => void
 }) {
   const [owner, name] = repo.repo_full_name.split('/')
   const [saving, setSaving] = useState(false)
 
-  const save = async () => {
+  const save = () => {
+    if (saving) return
     setSaving(true)
-    try {
-      await api.saveRepo({
-        repo_full_name: repo.repo_full_name,
-        description: repo.description,
-        language: repo.language,
-        html_url: repo.html_url,
-        stars: repo.stars,
-      })
-      onSaved(repo.repo_full_name) // parent removes it from the trending list
-    } catch {
-      setSaving(false) // leave the card in place if it failed
-    }
+    onSave() // parent removes the card optimistically and shows an undo toast
   }
 
   return (
     <div className="group relative flex h-full flex-col gap-3 rounded-xl border bg-card p-4 transition-all hover:border-brand/40 hover:shadow-sm">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold tabular-nums text-muted-foreground/60">#{rank}</span>
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs font-semibold tabular-nums text-muted-foreground/60">#{rank}</span>
+          <RankChange delta={rankDelta} />
+        </div>
         <div className="flex items-center gap-2">
           <DeltaPill delta={repo.star_delta} />
           <button
