@@ -10,7 +10,7 @@ from app.db import get_db
 from app.github import GitHubClient
 from app.models import AppSettings
 from app.schemas import SettingsStatus, SettingsUpdate
-from app.security import decrypt_token, encrypt_token
+from app.security import encrypt_token, try_decrypt_token
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -42,7 +42,11 @@ async def get_settings_status(db: AsyncSession = Depends(get_db)) -> SettingsSta
     row = await _get_row(db)
     if row is None or not row.github_token_encrypted:
         return SettingsStatus(configured=False)
-    token = decrypt_token(row.github_token_encrypted)
+    token = try_decrypt_token(row.github_token_encrypted)
+    if token is None:
+        # SECRET_KEY changed since the PAT was saved — the stored token is
+        # unrecoverable, so present as unconfigured and let the user re-enter it.
+        return SettingsStatus(configured=False)
     return SettingsStatus(configured=True, valid=None, login=row.github_login, masked_hint=_mask(token))
 
 
@@ -69,7 +73,12 @@ async def validate_settings(db: AsyncSession = Depends(get_db)) -> SettingsStatu
     if row is None or not row.github_token_encrypted:
         raise HTTPException(status_code=400, detail="No GitHub token configured yet")
 
-    token = decrypt_token(row.github_token_encrypted)
+    token = try_decrypt_token(row.github_token_encrypted)
+    if token is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Stored token can't be decrypted (SECRET_KEY changed) — re-enter your PAT.",
+        )
     client = GitHubClient(token)
     try:
         user = await client.get_authenticated_user()

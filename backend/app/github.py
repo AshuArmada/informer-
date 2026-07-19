@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import AppSettings
-from app.security import decrypt_token
+from app.security import try_decrypt_token
 
 GITHUB_API_BASE = "https://api.github.com"
 
@@ -112,5 +112,7 @@ async def get_github_client(db: AsyncSession) -> GitHubClient:
     row = result.scalar_one_or_none()
     if row is None or not row.github_token_encrypted:
         raise GitHubTokenNotConfigured()
-    token = decrypt_token(row.github_token_encrypted)
+    token = try_decrypt_token(row.github_token_encrypted)
+    if token is None:
+        raise GitHubTokenNotConfigured()
     return GitHubClient(token)
