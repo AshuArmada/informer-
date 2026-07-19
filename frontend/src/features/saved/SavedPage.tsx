@@ -20,13 +20,13 @@ function SavedCard({ repo, onRemove }: { repo: SavedRepo; onRemove: (name: strin
   }
 
   return (
-    <div className="group relative flex h-full flex-col gap-3 rounded-xl border bg-card p-4 transition-all hover:border-brand/40 hover:shadow-sm">
+    <div className="group relative flex h-full flex-col gap-3 rounded-xl border bg-card p-4 transition-[color,box-shadow,border-color] duration-200 hover:border-brand/40 hover:shadow-sm focus-within:ring-2 focus-within:ring-brand/50">
       <div className="flex items-start justify-between">
         <a
           href={repo.html_url}
           target="_blank"
           rel="noreferrer"
-          className="min-w-0 truncate text-[15px] font-medium after:absolute after:inset-0"
+          className="min-w-0 truncate text-[15px] font-medium after:absolute after:inset-0 focus-visible:outline-none"
         >
           <span className="text-muted-foreground">{owner}/</span>
           <span className="text-foreground group-hover:text-brand">{name}</span>
@@ -36,7 +36,7 @@ function SavedCard({ repo, onRemove }: { repo: SavedRepo; onRemove: (name: strin
           disabled={removing}
           aria-label={`Remove ${repo.repo_full_name}`}
           title="Remove from saved"
-          className="relative z-10 flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-destructive"
+          className="relative z-10 flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-destructive before:absolute before:left-1/2 before:top-1/2 before:size-11 before:-translate-x-1/2 before:-translate-y-1/2 before:content-['']"
         >
           <BookmarkX className="size-4" />
         </button>

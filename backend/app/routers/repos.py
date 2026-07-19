@@ -27,7 +27,12 @@ async def list_repos(db: AsyncSession = Depends(get_db)) -> list[GitHubRepo]:
     try:
         raw = await client.list_user_repos()
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"GitHub request failed: {exc}")
+        # Include the exception type: transport errors often stringify to "",
+        # which previously produced an unhelpful empty detail.
+        raise HTTPException(
+            status_code=502,
+            detail=f"GitHub request failed: {type(exc).__name__}: {exc}".rstrip(": "),
+        )
 
     tracked = await _tracked_set(db)
     repos = [

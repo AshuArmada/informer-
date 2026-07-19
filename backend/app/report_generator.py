@@ -66,7 +66,7 @@ async def _build_repo_report(client: GitHubClient, tracked: TrackedRepo) -> dict
             "open_issue_count": 0,
             "groups": [],
             "pr_counts": {"open": 0, "merged": 0, "closed": 0},
-            "error": f"Couldn't load this repo: {exc}",
+            "error": f"Couldn't load this repo: {str(exc) or type(exc).__name__}",
         }
 
     return {
@@ -79,6 +79,11 @@ async def _build_repo_report(client: GitHubClient, tracked: TrackedRepo) -> dict
     }
 
 
+# Unbounded gather fires 2 requests per tracked repo at once; past ~10 repos GitHub's
+# secondary rate limiting stalls the burst and requests start timing out.
+_MAX_CONCURRENT_REPOS = 4
+
+
 async def generate_report(db: AsyncSession) -> dict:
     """Build the full report for every tracked repo. Raises GitHubTokenNotConfigured
     if no PAT is set."""
@@ -86,7 +91,13 @@ async def generate_report(db: AsyncSession) -> dict:
     result = await db.execute(select(TrackedRepo).order_by(TrackedRepo.added_at))
     tracked = list(result.scalars())
 
-    repos = await asyncio.gather(*(_build_repo_report(client, t) for t in tracked))
+    sem = asyncio.Semaphore(_MAX_CONCURRENT_REPOS)
+
+    async def build_limited(t: TrackedRepo) -> dict:
+        async with sem:
+            return await _build_repo_report(client, t)
+
+    repos = await asyncio.gather(*(build_limited(t) for t in tracked))
     return {
         "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
         "repos": list(repos),

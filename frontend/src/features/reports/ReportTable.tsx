@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { CircleDot, GitPullRequest, Users, Inbox, CircleAlert } from 'lucide-react'
+import { CircleDot, GitPullRequest, Users, Inbox, CircleAlert, CheckCircle2 } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -32,7 +32,9 @@ function RepoBlock({ repo }: { repo: RepoReport }) {
       {repo.error ? (
         <p className="mt-3 text-sm text-destructive">{repo.error}</p>
       ) : repo.groups.length === 0 ? (
-        <p className="mt-3 text-sm text-muted-foreground">No open issues 🎉</p>
+        <p className="mt-3 flex items-center gap-1.5 text-sm text-muted-foreground">
+          <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" /> No open issues
+        </p>
       ) : (
         <div className="mt-3 flex flex-col gap-3">
           {repo.groups.map((group) => (

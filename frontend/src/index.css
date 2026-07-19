@@ -136,4 +136,16 @@
   html {
     @apply font-sans;
     }
+  /* Respect the OS "reduce motion" setting: neutralize transitions and the
+     infinite live-indicator ping/pulse for users who opt out of motion. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
 }

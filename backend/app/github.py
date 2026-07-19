@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,6 +10,11 @@ from app.models import AppSettings
 from app.security import try_decrypt_token
 
 GITHUB_API_BASE = "https://api.github.com"
+
+# Transient network hiccups (connection resets, timeouts) shouldn't bubble up as
+# user-facing errors — retry briefly before giving up.
+_RETRIES = 2
+_RETRY_BACKOFF_SECONDS = 0.5
 
 
 class GitHubTokenNotConfigured(Exception):
@@ -29,21 +36,34 @@ class GitHubClient:
             timeout=20.0,
         )
 
+    @staticmethod
+    async def _get(client: httpx.AsyncClient, url: str, params: dict | None = None) -> httpx.Response:
+        """GET with raise_for_status, retrying transient transport errors (resets, timeouts)."""
+        for attempt in range(_RETRIES + 1):
+            try:
+                resp = await client.get(url, params=params)
+                resp.raise_for_status()
+                return resp
+            except httpx.TransportError:
+                if attempt == _RETRIES:
+                    raise
+                await asyncio.sleep(_RETRY_BACKOFF_SECONDS * (attempt + 1))
+        raise AssertionError("unreachable")
+
     async def get_authenticated_user(self) -> dict:
         async with self._client() as client:
-            resp = await client.get("/user")
-            resp.raise_for_status()
+            resp = await self._get(client, "/user")
             return resp.json()
 
     async def search_repositories(
         self, query: str, sort: str = "stars", order: str = "desc", per_page: int = 100
     ) -> list[dict]:
         async with self._client() as client:
-            resp = await client.get(
+            resp = await self._get(
+                client,
                 "/search/repositories",
                 params={"q": query, "sort": sort, "order": order, "per_page": per_page},
             )
-            resp.raise_for_status()
             return resp.json().get("items", [])
 
     async def list_user_repos(self, per_page: int = 100) -> list[dict]:
@@ -51,7 +71,8 @@ class GitHubClient:
         async with self._client() as client:
             page = 1
             while True:
-                resp = await client.get(
+                resp = await self._get(
+                    client,
                     "/user/repos",
                     params={
                         "per_page": per_page,
@@ -59,7 +80,6 @@ class GitHubClient:
                         "affiliation": "owner,organization_member",
                     },
                 )
-                resp.raise_for_status()
                 batch = resp.json()
                 repos.extend(batch)
                 if len(batch) < per_page:
@@ -75,11 +95,11 @@ class GitHubClient:
         async with self._client() as client:
             page = 1
             while True:
-                resp = await client.get(
+                resp = await self._get(
+                    client,
                     f"/repos/{owner}/{repo}/issues",
                     params={"state": state, "per_page": per_page, "page": page},
                 )
-                resp.raise_for_status()
                 batch = resp.json()
                 issues.extend(batch)
                 if len(batch) < per_page:
@@ -94,11 +114,11 @@ class GitHubClient:
         async with self._client() as client:
             page = 1
             while True:
-                resp = await client.get(
+                resp = await self._get(
+                    client,
                     f"/repos/{owner}/{repo}/pulls",
                     params={"state": state, "per_page": per_page, "page": page},
                 )
-                resp.raise_for_status()
                 batch = resp.json()
                 prs.extend(batch)
                 if len(batch) < per_page:

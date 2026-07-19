@@ -59,6 +59,8 @@ export function RepoPicker({ onTrackedChange }: { onTrackedChange: () => void })
         <div className="relative w-full max-w-xs">
           <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
+            type="search"
+            aria-label="Search your repositories"
             placeholder="Search your repositories…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -93,6 +95,8 @@ export function RepoPicker({ onTrackedChange }: { onTrackedChange: () => void })
             <button
               onClick={() => toggle(repo)}
               disabled={pending === repo.full_name}
+              aria-pressed={repo.is_tracked}
+              aria-label={`${repo.is_tracked ? 'Untrack' : 'Track'} ${repo.full_name}`}
               className={cn(
                 'flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors',
                 repo.is_tracked

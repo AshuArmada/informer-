@@ -78,7 +78,7 @@ export function RepoCard({
   }
 
   return (
-    <div className="group relative flex h-full flex-col gap-3 rounded-xl border bg-card p-4 transition-all hover:border-brand/40 hover:shadow-sm">
+    <div className="group relative flex h-full flex-col gap-3 rounded-xl border bg-card p-4 transition-[color,box-shadow,border-color] duration-200 hover:border-brand/40 hover:shadow-sm focus-within:ring-2 focus-within:ring-brand/50">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
           <span className="text-xs font-semibold tabular-nums text-muted-foreground/60">#{rank}</span>
@@ -91,7 +91,7 @@ export function RepoCard({
             disabled={saving}
             aria-label={`Save ${repo.repo_full_name}`}
             title="Save to your dashboard"
-            className="relative z-10 flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-brand"
+            className="relative z-10 flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-brand before:absolute before:left-1/2 before:top-1/2 before:size-11 before:-translate-x-1/2 before:-translate-y-1/2 before:content-['']"
           >
             <Bookmark className={cn('size-4', saving && 'animate-pulse')} />
           </button>
@@ -103,7 +103,7 @@ export function RepoCard({
         href={repo.html_url}
         target="_blank"
         rel="noreferrer"
-        className="min-w-0 truncate text-[15px] font-medium after:absolute after:inset-0"
+        className="min-w-0 truncate text-[15px] font-medium after:absolute after:inset-0 focus-visible:outline-none"
       >
         <span className="text-muted-foreground">{owner}/</span>
         <span className="text-foreground group-hover:text-brand">{name}</span>

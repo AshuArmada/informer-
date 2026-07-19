@@ -66,8 +66,9 @@ export function ScheduleSettings() {
 
       <div className="grid grid-cols-2 gap-3">
         <div className="flex flex-col gap-1.5">
-          <Label>Cadence</Label>
+          <Label htmlFor="sched-cadence">Cadence</Label>
           <select
+            id="sched-cadence"
             className={selectClass}
             value={schedule.cadence}
             onChange={(e) =>
@@ -95,8 +96,9 @@ export function ScheduleSettings() {
 
         {schedule.cadence === 'weekly' && (
           <div className="col-span-2 flex flex-col gap-1.5">
-            <Label>Day of week</Label>
+            <Label htmlFor="sched-day">Day of week</Label>
             <select
+              id="sched-day"
               className={selectClass}
               value={schedule.day_of_week ?? 0}
               onChange={(e) => patch({ day_of_week: Number(e.target.value) })}
