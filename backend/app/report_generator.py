@@ -87,17 +87,18 @@ _MAX_CONCURRENT_REPOS = 4
 async def generate_report(db: AsyncSession) -> dict:
     """Build the full report for every tracked repo. Raises GitHubTokenNotConfigured
     if no PAT is set."""
-    client = await get_github_client(db)
     result = await db.execute(select(TrackedRepo).order_by(TrackedRepo.added_at))
     tracked = list(result.scalars())
 
     sem = asyncio.Semaphore(_MAX_CONCURRENT_REPOS)
 
-    async def build_limited(t: TrackedRepo) -> dict:
-        async with sem:
-            return await _build_repo_report(client, t)
+    async with await get_github_client(db) as client:
 
-    repos = await asyncio.gather(*(build_limited(t) for t in tracked))
+        async def build_limited(t: TrackedRepo) -> dict:
+            async with sem:
+                return await _build_repo_report(client, t)
+
+        repos = await asyncio.gather(*(build_limited(t) for t in tracked))
     return {
         "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
         "repos": list(repos),

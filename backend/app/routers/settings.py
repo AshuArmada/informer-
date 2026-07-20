@@ -79,9 +79,9 @@ async def validate_settings(db: AsyncSession = Depends(get_db)) -> SettingsStatu
             status_code=400,
             detail="Stored token can't be decrypted (SECRET_KEY changed) — re-enter your PAT.",
         )
-    client = GitHubClient(token)
     try:
-        user = await client.get_authenticated_user()
+        async with GitHubClient(token) as client:
+            user = await client.get_authenticated_user()
     except Exception:
         return SettingsStatus(configured=True, valid=False, login=row.github_login, masked_hint=_mask(token))
 

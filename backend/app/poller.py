@@ -90,7 +90,8 @@ async def poll_once() -> None:
             await _broadcast()
             return
 
-        candidates = await _search_candidates(client)
+        async with client:
+            candidates = await _search_candidates(client)
         if not candidates:
             trending_cache.error = "GitHub returned no results (rate-limited, or the token lacks access)."
             await _broadcast()

@@ -25,7 +25,8 @@ async def list_repos(db: AsyncSession = Depends(get_db)) -> list[GitHubRepo]:
         raise HTTPException(status_code=400, detail="No GitHub token configured — add one in Settings.")
 
     try:
-        raw = await client.list_user_repos()
+        async with client:
+            raw = await client.list_user_repos()
     except Exception as exc:
         # Include the exception type: transport errors often stringify to "",
         # which previously produced an unhelpful empty detail.

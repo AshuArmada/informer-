@@ -22,26 +22,35 @@ class GitHubTokenNotConfigured(Exception):
 
 
 class GitHubClient:
-    def __init__(self, token: str) -> None:
-        self._token = token
+    """Holds one pooled httpx client for its lifetime — a fresh client per call costs a
+    DNS + TLS handshake each time (~1s/call vs ~0.2s reused). Use as an async context
+    manager, or call aclose() when done."""
 
-    def _client(self) -> httpx.AsyncClient:
-        return httpx.AsyncClient(
+    def __init__(self, token: str) -> None:
+        self._http = httpx.AsyncClient(
             base_url=GITHUB_API_BASE,
             headers={
-                "Authorization": f"Bearer {self._token}",
+                "Authorization": f"Bearer {token}",
                 "Accept": "application/vnd.github+json",
                 "X-GitHub-Api-Version": "2022-11-28",
             },
             timeout=20.0,
         )
 
-    @staticmethod
-    async def _get(client: httpx.AsyncClient, url: str, params: dict | None = None) -> httpx.Response:
+    async def aclose(self) -> None:
+        await self._http.aclose()
+
+    async def __aenter__(self) -> GitHubClient:
+        return self
+
+    async def __aexit__(self, *exc: object) -> None:
+        await self.aclose()
+
+    async def _get(self, url: str, params: dict | None = None) -> httpx.Response:
         """GET with raise_for_status, retrying transient transport errors (resets, timeouts)."""
         for attempt in range(_RETRIES + 1):
             try:
-                resp = await client.get(url, params=params)
+                resp = await self._http.get(url, params=params)
                 resp.raise_for_status()
                 return resp
             except httpx.TransportError:
@@ -50,81 +59,48 @@ class GitHubClient:
                 await asyncio.sleep(_RETRY_BACKOFF_SECONDS * (attempt + 1))
         raise AssertionError("unreachable")
 
+    async def _get_paginated(self, url: str, params: dict, per_page: int) -> list[dict]:
+        items: list[dict] = []
+        page = 1
+        while True:
+            resp = await self._get(url, params={**params, "per_page": per_page, "page": page})
+            batch = resp.json()
+            items.extend(batch)
+            if len(batch) < per_page:
+                return items
+            page += 1
+
     async def get_authenticated_user(self) -> dict:
-        async with self._client() as client:
-            resp = await self._get(client, "/user")
-            return resp.json()
+        resp = await self._get("/user")
+        return resp.json()
 
     async def search_repositories(
         self, query: str, sort: str = "stars", order: str = "desc", per_page: int = 100
     ) -> list[dict]:
-        async with self._client() as client:
-            resp = await self._get(
-                client,
-                "/search/repositories",
-                params={"q": query, "sort": sort, "order": order, "per_page": per_page},
-            )
-            return resp.json().get("items", [])
+        resp = await self._get(
+            "/search/repositories",
+            params={"q": query, "sort": sort, "order": order, "per_page": per_page},
+        )
+        return resp.json().get("items", [])
 
     async def list_user_repos(self, per_page: int = 100) -> list[dict]:
-        repos: list[dict] = []
-        async with self._client() as client:
-            page = 1
-            while True:
-                resp = await self._get(
-                    client,
-                    "/user/repos",
-                    params={
-                        "per_page": per_page,
-                        "page": page,
-                        "affiliation": "owner,organization_member",
-                    },
-                )
-                batch = resp.json()
-                repos.extend(batch)
-                if len(batch) < per_page:
-                    break
-                page += 1
-        return repos
+        return await self._get_paginated(
+            "/user/repos", {"affiliation": "owner,organization_member"}, per_page
+        )
 
     async def list_issues(
         self, owner: str, repo: str, state: str = "open", per_page: int = 100
     ) -> list[dict]:
         """Open issues for a repo, with PRs (which GitHub's issues endpoint also returns) filtered out."""
-        issues: list[dict] = []
-        async with self._client() as client:
-            page = 1
-            while True:
-                resp = await self._get(
-                    client,
-                    f"/repos/{owner}/{repo}/issues",
-                    params={"state": state, "per_page": per_page, "page": page},
-                )
-                batch = resp.json()
-                issues.extend(batch)
-                if len(batch) < per_page:
-                    break
-                page += 1
+        issues = await self._get_paginated(
+            f"/repos/{owner}/{repo}/issues", {"state": state}, per_page
+        )
         return [i for i in issues if "pull_request" not in i]
 
     async def list_pull_requests(
         self, owner: str, repo: str, state: str = "all", per_page: int = 100
     ) -> list[dict]:
-        prs: list[dict] = []
-        async with self._client() as client:
-            page = 1
-            while True:
-                resp = await self._get(
-                    client,
-                    f"/repos/{owner}/{repo}/pulls",
-                    params={"state": state, "per_page": per_page, "page": page},
-                )
-                batch = resp.json()
-                prs.extend(batch)
-                if len(batch) < per_page:
-                    break
-                page += 1
-        return prs
+        return await self._get_paginated(f"/repos/{owner}/{repo}/pulls", {"state": state}, per_page)
 
 
 async def get_github_client(db: AsyncSession) -> GitHubClient:
