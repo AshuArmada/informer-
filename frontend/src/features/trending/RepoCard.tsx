@@ -81,7 +81,7 @@ export function RepoCard({
     <div className="group relative flex h-full flex-col gap-3 rounded-xl border bg-card p-4 transition-[color,box-shadow,border-color] duration-200 hover:border-brand/40 hover:shadow-sm focus-within:ring-2 focus-within:ring-brand/50">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
-          <span className="text-xs font-semibold tabular-nums text-muted-foreground/60">#{rank}</span>
+          <span className="text-xs font-semibold tabular-nums text-muted-foreground">#{rank}</span>
           <RankChange delta={rankDelta} />
         </div>
         <div className="flex items-center gap-2">
@@ -103,6 +103,7 @@ export function RepoCard({
         href={repo.html_url}
         target="_blank"
         rel="noreferrer"
+        title={repo.repo_full_name}
         className="min-w-0 truncate text-[15px] font-medium after:absolute after:inset-0 focus-visible:outline-none"
       >
         <span className="text-muted-foreground">{owner}/</span>

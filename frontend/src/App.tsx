@@ -36,7 +36,7 @@ function App() {
                 aria-label={label}
                 aria-current={view === id ? 'page' : undefined}
                 className={cn(
-                  'flex min-h-9 items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors',
+                  'flex min-h-11 items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors',
                   view === id
                     ? 'bg-brand-muted text-brand'
                     : 'text-muted-foreground hover:text-foreground',

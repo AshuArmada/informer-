@@ -275,7 +275,7 @@ export function TrendingPage() {
       )}
 
       {!data && !loadError && (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: skeletonCount }).map((_, i) => (
             <Skeleton key={i} className="h-40 w-full rounded-xl" />
           ))}
@@ -292,7 +292,7 @@ export function TrendingPage() {
         </p>
       )}
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {visibleRepos.map(({ repo, rank, index }) => (
           <RepoCard
             key={repo.repo_full_name}
