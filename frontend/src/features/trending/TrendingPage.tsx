@@ -14,18 +14,19 @@ import { RepoCard } from '@/features/trending/RepoCard'
 
 const FEED_COUNT_KEY = 'informer-feed-count'
 
+// Sub-minute is reported as "just now" rather than a second count: the label only
+// re-renders on the ticker, so a precise "12s ago" would frequently be stale.
 function timeAgo(iso: string | null): string {
   if (!iso) return 'never'
   const seconds = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000))
-  if (seconds < 5) return 'just now'
-  if (seconds < 60) return `${seconds}s ago`
+  if (seconds < 60) return 'just now'
   const minutes = Math.round(seconds / 60)
   if (minutes < 60) return `${minutes}m ago`
   const hours = Math.round(minutes / 60)
   return `${hours}h ago`
 }
 
-/** Re-render every 30s so the "updated X ago" label keeps counting between SSE events. */
+/** Re-render on an interval so the "updated X ago" label keeps counting between SSE events. */
 function useTicker(intervalMs: number) {
   const [, setTick] = useState(0)
   useEffect(() => {
@@ -35,13 +36,15 @@ function useTicker(intervalMs: number) {
 }
 
 function LiveIndicator({ status, updatedAt }: { status: StreamStatus; updatedAt: string | null }) {
-  useTicker(30_000)
+  useTicker(15_000)
   const isLive = status === 'open'
   const label = isLive ? 'Live' : status === 'connecting' ? 'Connecting…' : 'Reconnecting…'
   return (
     <div className="flex items-center gap-3 text-xs text-muted-foreground">
-      <span className="flex items-center gap-1.5">
-        <span className="relative flex size-2">
+      {/* Live region covers only the connection status — the timestamp changes on every
+          tick and would otherwise be announced repeatedly. */}
+      <span role="status" aria-live="polite" className="flex items-center gap-1.5">
+        <span className="relative flex size-2" aria-hidden>
           {isLive && (
             <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-500 opacity-75" />
           )}
@@ -54,7 +57,7 @@ function LiveIndicator({ status, updatedAt }: { status: StreamStatus; updatedAt:
         </span>
         {label}
       </span>
-      <span className="text-muted-foreground/70">Updated {timeAgo(updatedAt)}</span>
+      <span>Updated {timeAgo(updatedAt)}</span>
     </div>
   )
 }
@@ -71,8 +74,9 @@ function Chip({
   return (
     <button
       onClick={onClick}
+      aria-pressed={active}
       className={cn(
-        'flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors',
+        'flex min-h-8 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors',
         active
           ? 'border-brand/40 bg-brand-muted text-brand'
           : 'border-transparent bg-muted/60 text-muted-foreground hover:text-foreground',
@@ -102,6 +106,7 @@ function LanguageFilter({
           <span
             className="size-2 rounded-full"
             style={{ backgroundColor: languageColor(lang) }}
+            aria-hidden
           />
           {lang}
           <span className="tabular-nums opacity-60">{count}</span>
@@ -274,16 +279,26 @@ export function TrendingPage() {
         )
       )}
 
+      {/* Placeholder chip row keeps the filter's slot reserved so the card grid doesn't
+          shift down when the real filter mounts alongside the first payload. */}
       {!data && !loadError && (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: skeletonCount }).map((_, i) => (
-            <Skeleton key={i} className="h-40 w-full rounded-xl" />
+        <div className="flex flex-wrap items-center gap-1.5">
+          {['w-14', 'w-24', 'w-20', 'w-28', 'w-16'].map((w) => (
+            <Skeleton key={w} className={cn('h-8 rounded-full', w)} />
           ))}
         </div>
       )}
 
       {languages.length > 1 && (
         <LanguageFilter languages={languages} selected={selectedLang} onSelect={setSelectedLang} />
+      )}
+
+      {!data && !loadError && (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: skeletonCount }).map((_, i) => (
+            <Skeleton key={i} className="h-40 w-full rounded-xl" />
+          ))}
+        </div>
       )}
 
       {data && data.repos.length === 0 && !data.error && (
