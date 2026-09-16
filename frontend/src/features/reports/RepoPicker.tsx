@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Button } from '@/components/ui/button'
 import { api, type GitHubRepo } from '@/lib/api'
 
 export function RepoPicker({ onTrackedChange }: { onTrackedChange: () => void }) {
@@ -11,13 +12,16 @@ export function RepoPicker({ onTrackedChange }: { onTrackedChange: () => void })
   const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [pending, setPending] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
+    setError(null)
     api
       .getRepos()
       .then(setRepos)
       .catch((e: Error) => setError(e.message))
-  }, [])
+  }, [attempt])
 
   const filtered = useMemo(() => {
     if (!repos) return []
@@ -29,6 +33,8 @@ export function RepoPicker({ onTrackedChange }: { onTrackedChange: () => void })
   const trackedCount = repos?.filter((r) => r.is_tracked).length ?? 0
 
   const toggle = async (repo: GitHubRepo) => {
+    if (pending) return
+    setActionError(null)
     setPending(repo.full_name)
     try {
       if (repo.is_tracked) {
@@ -42,19 +48,20 @@ export function RepoPicker({ onTrackedChange }: { onTrackedChange: () => void })
         ) ?? null,
       )
       onTrackedChange()
-    } catch {
-      // Leave state as-is; the row just won't toggle.
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : 'Could not update tracking. Try again.')
     } finally {
       setPending(null)
     }
   }
 
   if (error) {
-    return <p className="text-sm text-destructive">{error}</p>
+    return <div role="alert"><p className="text-sm text-destructive">{error}</p><Button variant="outline" onClick={() => setAttempt(n => n + 1)}>Retry repositories</Button></div>
   }
 
   return (
     <div className="flex flex-col gap-3">
+      {actionError && <p role="alert" className="text-sm text-destructive">{actionError}</p>}
       <div className="flex items-center justify-between">
         <div className="relative w-full max-w-xs">
           <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -94,7 +101,7 @@ export function RepoPicker({ onTrackedChange }: { onTrackedChange: () => void })
             </div>
             <button
               onClick={() => toggle(repo)}
-              disabled={pending === repo.full_name}
+              disabled={pending !== null}
               aria-pressed={repo.is_tracked}
               aria-label={`${repo.is_tracked ? 'Untrack' : 'Track'} ${repo.full_name}`}
               className={cn(

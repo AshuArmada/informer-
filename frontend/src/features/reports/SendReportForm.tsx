@@ -8,20 +8,23 @@ import { api } from '@/lib/api'
 
 export function SendReportForm() {
   const [email, setEmail] = useState('')
-  const [smtpConfigured, setSmtpConfigured] = useState(true)
+  const [smtpConfigured, setSmtpConfigured] = useState<boolean | null>(null)
   const [sending, setSending] = useState(false)
   const [result, setResult] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [configError, setConfigError] = useState<string | null>(null)
+  const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
+    setConfigError(null)
     api.getReportConfig().then((cfg) => {
       setSmtpConfigured(cfg.smtp_configured)
       if (cfg.default_email) setEmail(cfg.default_email)
-    })
-  }, [])
+    }).catch((e: Error) => setConfigError(e.message))
+  }, [attempt])
 
   const send = async () => {
-    if (!email.trim()) return
+    if (!email.trim() || sending || !smtpConfigured) return
     setSending(true)
     setResult(null)
     setError(null)
@@ -37,7 +40,8 @@ export function SendReportForm() {
 
   return (
     <div className="flex flex-col gap-3">
-      {!smtpConfigured && (
+      {configError && <div role="alert"><p className="text-sm text-destructive">{configError}</p><Button variant="outline" onClick={() => setAttempt(n => n + 1)}>Retry email setup</Button></div>}
+      {smtpConfigured === false && (
         <Alert variant="destructive">
           <TriangleAlert className="size-4" />
           <AlertTitle>SMTP not configured</AlertTitle>
@@ -47,22 +51,24 @@ export function SendReportForm() {
         </Alert>
       )}
 
-      <div className="flex flex-col gap-2">
+      <form className="flex flex-col gap-2" onSubmit={e => { e.preventDefault(); void send() }}>
         <Label htmlFor="report-email">Send to</Label>
         <div className="flex gap-2">
           <Input
             id="report-email"
             type="email"
+            required
+            disabled={sending}
             placeholder="you@example.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
-          <Button onClick={send} disabled={sending || !smtpConfigured || !email.trim()}>
+          <Button type="submit" disabled={sending || !smtpConfigured || !email.trim()}>
             {sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
             Send now
           </Button>
         </div>
-      </div>
+      </form>
 
       {result && (
         <p className="flex items-center gap-1.5 text-sm text-emerald-600 dark:text-emerald-400">

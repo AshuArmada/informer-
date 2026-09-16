@@ -7,7 +7,7 @@ A personal, local-only AI assistant for finding open source contributions.
 3. **Saved projects** — bookmark repositories for later.
 4. **Repo reports** — issues grouped by assignee and PR counts, emailed on demand or on a schedule.
 
-Configure the GitHub PAT in **Settings**. The default **Contribute** page works with GitHub alone; AI guidance additionally needs a server-side OpenAI API key. See [Contribution discovery](./docs/contributions.md) for setup and metric definitions.
+Configure the GitHub PAT in **Settings**. The default **Contribute** page works with GitHub alone; AI guidance supports local Ollama, Google Gemini, and OpenAI. See [Contribution discovery](./docs/contributions.md) for setup and metric definitions.
 
 See [CLAUDE.md](./CLAUDE.md) for the full architecture and design decisions.
 
@@ -80,14 +80,36 @@ ever shows a masked hint (e.g. `ghp_••••1234`).
 
 ## 5. AI contribution guidance (optional)
 
-Add these values to `backend/.env`, then restart the backend:
+Select a default provider in `backend/.env`, then restart the backend. You can switch providers in the advisor before generating a plan.
+
+**Local Ollama (no API key):**
 
 ```dotenv
+AI_PROVIDER=ollama
+OLLAMA_BASE_URL=http://127.0.0.1:11434
+OLLAMA_MODEL=llama3.2:3b
+AI_TIMEOUT_SECONDS=180
+```
+
+Run `ollama pull llama3.2:3b`, then start the Ollama app or run `ollama serve`. The address is relative to the backend machine. Larger models and cold starts may need a longer timeout (up to 600 seconds).
+
+**Google Gemini:**
+
+```dotenv
+AI_PROVIDER=gemini
+GEMINI_API_KEY=your-api-key
+GEMINI_MODEL=gemini-2.5-flash
+```
+
+**OpenAI:**
+
+```dotenv
+AI_PROVIDER=openai
 OPENAI_API_KEY=your-api-key
 OPENAI_MODEL=gpt-4.1-mini
 ```
 
-The key stays on the backend. Guidance uses the OpenAI Responses API and runs only when you click **Suggest where to start**. Your entered skills, experience, and public repository evidence are sent to OpenAI. No GitHub token is included. Choose a Responses-compatible model available to your OpenAI project.
+Keys stay on the backend. Only the selected provider receives your skills, experience, and public repository evidence; GitHub credentials are never included. There is no automatic provider fallback. Ollama is local by default; configuration does not mean its server is running or its model is installed. See [provider setup and limitations](./docs/contributions.md).
 
 ## 6. SMTP (for the Reports feature)
 

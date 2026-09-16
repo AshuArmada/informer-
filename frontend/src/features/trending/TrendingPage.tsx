@@ -142,6 +142,7 @@ export function TrendingPage() {
   // Apply an authoritative feed update (initial fetch or SSE), computing rank movement
   // against the previous server ordering so local edits (save/undo) don't fake a delta.
   const applyServerData = useCallback((payload: TrendingResponse) => {
+    setLoadError(null)
     const deltas = new Map<string, number>()
     const nextRanks = new Map<string, number>()
     payload.repos.forEach((repo, i) => {

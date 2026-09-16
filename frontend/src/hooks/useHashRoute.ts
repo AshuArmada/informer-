@@ -4,7 +4,7 @@ export const VIEWS = ['contribute', 'trending', 'saved', 'reports', 'settings'] 
 export type View = (typeof VIEWS)[number]
 
 function currentView(): View {
-  const hash = window.location.hash.replace(/^#\/?/, '') as View
+  const hash = window.location.hash.replace(/^#\/?/, '').split('?')[0] as View
   return VIEWS.includes(hash) ? hash : 'contribute'
 }
 

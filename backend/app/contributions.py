@@ -42,6 +42,7 @@ def repo_summary(repo: dict) -> dict:
     return {"full_name": repo["full_name"], "description": repo.get("description"),
             "html_url": repo["html_url"], "language": repo.get("language"),
             "stars": repo.get("stargazers_count", 0), "topics": repo.get("topics", []),
+            "created_at": repo.get("created_at"), "open_issues_and_prs": repo.get("open_issues_count", 0),
             "pushed_at": repo.get("pushed_at"), "archived": repo.get("archived", False),
             "disabled": repo.get("disabled", False), "license": (repo.get("license") or {}).get("spdx_id")}
 
@@ -55,9 +56,9 @@ async def analyze_repository(client: GitHubClient, owner: str, name: str) -> dic
         raise ValueError("Contribution discovery supports public repositories only.")
     warnings: list[str] = []
 
-    async def optional(suffix: str, params: dict | None = None):
+    async def optional(suffix: str, params: dict | None = None, *, absolute: bool = False):
         try:
-            return await client.get_json(path + suffix, params)
+            return await client.get_json(suffix if absolute else path + suffix, params)
         except httpx.HTTPError:
             warnings.append(f"Could not load {suffix.strip('/')}. This data is unavailable, not zero.")
             return None
@@ -65,8 +66,11 @@ async def analyze_repository(client: GitHubClient, owner: str, name: str) -> dic
     community, pulls, issue_page = await asyncio.gather(
         optional("/community/profile"),
         optional("/pulls", {"state": "closed", "sort": "updated", "direction": "desc", "per_page": 100}),
-        optional("/issues", {"state": "open", "sort": "updated", "direction": "desc", "per_page": 100}),
+        optional("/search/issues", {"q": f"repo:{repo['full_name']} is:issue is:open",
+                                  "sort": "updated", "order": "desc", "per_page": 100}, absolute=True),
     )
+    if issue_page and issue_page.get("incomplete_results"):
+        warnings.append("GitHub returned incomplete issue search results. View all issues on GitHub.")
     files = (community or {}).get("files") or {}
     documents = []
     for key, title in [("contributing", "Contribution guide"), ("code_of_conduct_file", "Code of conduct"),
@@ -94,7 +98,7 @@ async def analyze_repository(client: GitHubClient, owner: str, name: str) -> dic
                "assignees": [a["login"] for a in i.get("assignees", [])],
                "updated_at": i["updated_at"], "comments": i.get("comments", 0),
                "body_excerpt": (i.get("body") or "")[:1200]}
-              for i in (issue_page or []) if "pull_request" not in i]
+              for i in (issue_page or {}).get("items", []) if "pull_request" not in i]
     labels = Counter(label for i in issues for label in i["labels"])
     now = datetime.now(timezone.utc)
     pushed = timestamp(repo.get("pushed_at"))
@@ -109,7 +113,8 @@ async def analyze_repository(client: GitHubClient, owner: str, name: str) -> dic
         "contributing_detected": bool(files.get("contributing")) if community is not None else None,
         "acceptance": acceptance_metrics(pulls, now) if pulls is not None else None,
         "issues": issues, "issues_available": issue_page is not None,
-        "issues_capped": len(issue_page or []) >= 100,
+        "issues_capped": bool(issue_page and (issue_page.get("total_count", 0) > len(issues) or issue_page.get("incomplete_results"))),
+        "issue_total": issue_page.get("total_count") if issue_page is not None else None,
         "labels": [{"name": label, "count": count} for label, count in labels.most_common()],
         "warnings": warnings,
     }

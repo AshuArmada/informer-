@@ -4,17 +4,22 @@ import { PageHeader } from '@/components/PageHeader'
 import { Skeleton } from '@/components/ui/skeleton'
 import { languageColor } from '@/lib/languageColors'
 import { api, type SavedRepo } from '@/lib/api'
+import { Button } from '@/components/ui/button'
+import { contributionLink } from '@/features/contribute/navigation'
 
 function SavedCard({ repo, onRemove }: { repo: SavedRepo; onRemove: (name: string) => void }) {
   const [owner, name] = repo.repo_full_name.split('/')
   const [removing, setRemoving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const remove = async () => {
     setRemoving(true)
+    setError(null)
     try {
       await api.unsaveRepo(repo.repo_full_name)
       onRemove(repo.repo_full_name)
-    } catch {
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not remove this project. Try again.')
       setRemoving(false)
     }
   }
@@ -46,7 +51,9 @@ function SavedCard({ repo, onRemove }: { repo: SavedRepo; onRemove: (name: strin
         <p className="line-clamp-3 flex-1 text-sm text-muted-foreground">{repo.description}</p>
       )}
 
-      <div className="mt-auto flex items-center gap-4 text-xs text-muted-foreground">
+      {error && <p role="alert" className="relative z-10 text-sm text-destructive">{error}</p>}
+      <Button variant="outline" className="relative z-10 mt-auto" asChild><a href={contributionLink(repo.repo_full_name)}>Explore contribution fit</a></Button>
+      <div className="flex items-center gap-4 text-xs text-muted-foreground">
         {repo.language && (
           <span className="flex items-center gap-1.5">
             <span
@@ -68,13 +75,15 @@ function SavedCard({ repo, onRemove }: { repo: SavedRepo; onRemove: (name: strin
 export function SavedPage() {
   const [repos, setRepos] = useState<SavedRepo[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
+    setError(null)
     api
       .getSaved()
       .then(setRepos)
       .catch((e: Error) => setError(e.message))
-  }, [])
+  }, [attempt])
 
   const handleRemove = (fullName: string) => {
     setRepos((prev) => prev?.filter((r) => r.repo_full_name !== fullName) ?? null)
@@ -82,9 +91,9 @@ export function SavedPage() {
 
   return (
     <div className="flex w-full flex-col gap-6 px-4 py-8 sm:px-6">
-      <PageHeader title="Saved" description="Repositories you've bookmarked from the trending feed." />
+      <PageHeader title="Saved" description="Your bookmarked projects from discovery and trending." />
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && <div role="alert"><p className="text-sm text-destructive">{error}</p><Button variant="outline" onClick={() => setAttempt(n => n + 1)}>Retry saved projects</Button></div>}
 
       {!repos && !error && (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -98,8 +107,9 @@ export function SavedPage() {
         <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed p-10 text-center">
           <Bookmark className="size-6 text-muted-foreground" />
           <p className="max-w-sm text-sm text-muted-foreground">
-            Nothing saved yet. Hit the bookmark icon on a repo in the Trending feed to keep it here.
+            Nothing saved yet. Save a project from Contribute or bookmark one in Trending.
           </p>
+          <Button asChild><a href="#contribute">Discover projects</a></Button>
         </div>
       )}
 

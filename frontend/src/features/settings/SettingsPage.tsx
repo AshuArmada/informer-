@@ -17,7 +17,7 @@ export function SettingsPage() {
             <div className="flex flex-col gap-1">
               <CardTitle>GitHub Personal Access Token</CardTitle>
               <CardDescription>
-                Both the Trending feed and Repo Reports need a GitHub token. It's stored encrypted
+                Contribution discovery, Trending, and Repo Reports need a GitHub token. It's stored encrypted
                 in the local database and never sent back to the browser.
               </CardDescription>
             </div>
