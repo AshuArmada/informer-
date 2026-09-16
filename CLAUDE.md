@@ -1,5 +1,9 @@
 # Informer
 
+## Contribution discovery (current direction)
+
+The default view is now **Contribute**, an AI-assisted public open source contribution explorer. Search by topic/language/good first issues; inspect repository activity, community documents, bounded PR acceptance statistics, and issues with label filters. Optional OpenAI guidance uses fresh GitHub evidence and user skills. See [docs/contributions.md](./docs/contributions.md) for setup, data limits, and API definitions. Backend: `app/contributions.py`, `routers/contributions.py`; frontend: `features/contribute/ContributePage.tsx`. Configure `OPENAI_API_KEY` and `OPENAI_MODEL` on the backend. Existing trending, saved, report, and Settings features remain available. The historical v1 decisions below apply to those features; public contribution discovery does not use the report tracker or its private-repository scope.
+
 A personal, local-only, single-user dashboard:
 
 1. **Trending feed** — GitHub trending repos, ranked by star velocity, updating live via SSE.

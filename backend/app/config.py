@@ -9,6 +9,8 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://informer:informer@localhost:5432/informer"
     secret_key: str
     poll_interval_minutes: int = 10
+    openai_api_key: str | None = None
+    openai_model: str = "gpt-4.1-mini"
 
     smtp_host: str | None = None
     smtp_port: int = 587

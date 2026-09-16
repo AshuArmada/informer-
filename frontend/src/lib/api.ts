@@ -5,6 +5,63 @@ export interface SettingsStatus {
   masked_hint: string | null
 }
 
+export interface ContributionRepo {
+  full_name: string
+  description: string | null
+  html_url: string
+  language: string | null
+  stars: number
+  topics: string[]
+  pushed_at: string | null
+  archived: boolean
+  disabled: boolean
+  license: string | null
+}
+
+export interface ContributionIssue {
+  number: number
+  title: string
+  html_url: string
+  labels: string[]
+  assignees: string[]
+  updated_at: string
+  comments: number
+  body_excerpt: string
+}
+
+export interface ContributionAnalysis {
+  repo: ContributionRepo
+  fetched_at: string
+  state: string
+  days_since_push: number | null
+  community_health: number | null
+  documents: { name: string; url: string }[]
+  contributing_excerpt: string | null
+  contributing_detected: boolean | null
+  acceptance: {
+    window_days: number
+    sample_size: number
+    closed_in_window: number
+    merged_in_window: number
+    merge_rate: number | null
+    median_merge_days: number | null
+    weeks_with_merges: number
+    latest_sampled_merge: string | null
+    sample_capped: boolean
+  } | null
+  issues: ContributionIssue[]
+  issues_available: boolean
+  issues_capped: boolean
+  labels: { name: string; count: number }[]
+  warnings: string[]
+}
+
+export interface ContributionAdvice {
+  text: string
+  model: string
+  fetched_at: string
+}
+
 export interface TrendingRepo {
   repo_full_name: string
   stars: number
@@ -99,6 +156,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  getContributionConfig: () => request<{ ai_configured: boolean }>('/contributions/config'),
+  searchContributions: (q: string, language: string, beginner: boolean, signal?: AbortSignal) =>
+    request<{ repos: ContributionRepo[]; query: string }>(
+      `/contributions/search?${new URLSearchParams({ q, language, beginner: String(beginner) })}`, { signal }),
+  analyzeContribution: (fullName: string, signal?: AbortSignal) =>
+    request<ContributionAnalysis>(`/contributions/repos/${fullName.split('/').map(encodeURIComponent).join('/')}`, { signal }),
+  getContributionAdvice: (fullName: string, skills: string, experience: string, signal?: AbortSignal) =>
+    request<ContributionAdvice>(`/contributions/repos/${fullName.split('/').map(encodeURIComponent).join('/')}/advice`, {
+      method: 'POST', body: JSON.stringify({ skills, experience }), signal,
+    }),
   getSettings: () => request<SettingsStatus>('/settings'),
   updateSettings: (github_token: string) =>
     request<SettingsStatus>('/settings', {

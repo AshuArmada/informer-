@@ -1,11 +1,13 @@
 # Informer
 
-A personal, local-only dashboard with two features:
+A personal, local-only AI assistant for finding open source contributions.
 
-1. **Trending feed** — GitHub trending repos, ranked by star velocity, updating live via SSE. *(not built yet)*
-2. **Repo issue/PR reports** — for repos you track, shows open issues grouped by assignee + PR counts, emailed on demand or on a schedule. *(not built yet)*
+1. **Contribute** — discover public repositories by topic, language, and good first issues. Inspect activity, contribution rules, sampled PR acceptance metrics, and current issues by label or assignee status. Get personalized AI guidance based on your skills and live repository evidence.
+2. **Trending feed** — GitHub repositories ranked by star velocity, updating via SSE.
+3. **Saved projects** — bookmark repositories for later.
+4. **Repo reports** — issues grouped by assignee and PR counts, emailed on demand or on a schedule.
 
-Currently implemented: the **Settings page**, where you configure the GitHub PAT both features depend on.
+Configure the GitHub PAT in **Settings**. The default **Contribute** page works with GitHub alone; AI guidance additionally needs a server-side OpenAI API key. See [Contribution discovery](./docs/contributions.md) for setup and metric definitions.
 
 See [CLAUDE.md](./CLAUDE.md) for the full architecture and design decisions.
 
@@ -76,7 +78,18 @@ after saving to confirm it works — the app shows which GitHub account it authe
 The token is encrypted at rest in Postgres and is never sent back to the browser; the UI only
 ever shows a masked hint (e.g. `ghp_••••1234`).
 
-## 5. SMTP (for the Reports feature, once built)
+## 5. AI contribution guidance (optional)
+
+Add these values to `backend/.env`, then restart the backend:
+
+```dotenv
+OPENAI_API_KEY=your-api-key
+OPENAI_MODEL=gpt-4.1-mini
+```
+
+The key stays on the backend. Guidance uses the OpenAI Responses API and runs only when you click **Suggest where to start**. Your entered skills, experience, and public repository evidence are sent to OpenAI. No GitHub token is included. Choose a Responses-compatible model available to your OpenAI project.
+
+## 6. SMTP (for the Reports feature)
 
 Set `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` / `SMTP_FROM` in `backend/.env`.
 For Gmail, use an app password (not your account password):

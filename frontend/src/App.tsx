@@ -1,4 +1,4 @@
-import { Sparkles, Mail, Settings as SettingsIcon, TrendingUp, Bookmark } from 'lucide-react'
+import { Sparkles, Mail, Settings as SettingsIcon, TrendingUp, Bookmark, Compass } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { SettingsPage } from '@/features/settings/SettingsPage'
@@ -6,8 +6,10 @@ import { TrendingPage } from '@/features/trending/TrendingPage'
 import { ReportsPage } from '@/features/reports/ReportsPage'
 import { SavedPage } from '@/features/saved/SavedPage'
 import { useHashRoute, type View } from '@/hooks/useHashRoute'
+import { ContributePage } from '@/features/contribute/ContributePage'
 
 const NAV_ITEMS: { id: View; label: string; icon: typeof Sparkles }[] = [
+  { id: 'contribute', label: 'Contribute', icon: Compass },
   { id: 'trending', label: 'Trending', icon: TrendingUp },
   { id: 'saved', label: 'Saved', icon: Bookmark },
   { id: 'reports', label: 'Reports', icon: Mail },
@@ -20,7 +22,7 @@ function App() {
   return (
     <div className="flex min-h-svh flex-col bg-background text-foreground">
       <header className="sticky top-0 z-20 border-b bg-background/80 backdrop-blur-md">
-        <div className="mx-auto flex h-14 w-full max-w-5xl items-center justify-between gap-4 px-4 sm:px-6">
+        <div className="mx-auto flex min-h-16 w-full max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-2 sm:px-6">
           <div className="flex items-center gap-2">
             <div className="flex size-7 items-center justify-center rounded-lg bg-brand text-brand-foreground">
               <Sparkles className="size-4" />
@@ -52,7 +54,8 @@ function App() {
         </div>
       </header>
 
-      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col">
+      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col">
+        {view === 'contribute' && <ContributePage />}
         {view === 'trending' && <TrendingPage />}
         {view === 'saved' && <SavedPage />}
         {view === 'reports' && <ReportsPage />}
