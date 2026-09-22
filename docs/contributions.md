@@ -2,6 +2,41 @@
 
 Open **Contribute**, the app's default view. Search a topic, select a programming language, and optionally require projects with good first issues. The page automatically loads a discovery feed. Search returns 12 public, non-archived, non-fork repositories per page, pushed in the last 90 days. Choose Active projects or New projects (also created in the last 90 days), and sort by recent updates or stars. Load more adds the next page using the applied filters, up to 300 matches. Refresh projects fetches the first page again. Cards show language, stars, topics, license, creation date, last push, and open issues plus PRs; the combined count is not an issue-only count. A good-first-issue badge appears when that discovery filter was applied. Rules and merge statistics load when opening project analysis. Enter `owner/repository` or a GitHub repository URL to inspect a specific project directly; discovery filters do not apply to direct inspection.
 
+## Web discoveries
+
+Select **Web discoveries** on the Contribute page to browse a separate collection
+scraped from [GitHub Trending](https://github.com/trending) and
+[Good First Issue](https://goodfirstissue.dev/). This collection needs no GitHub
+token; opening contribution analysis still needs the PAT configured in Settings.
+Source cards show their fetch time and availability. Project cards show source
+labels, descriptions, languages, and approximate source-reported stars. Filter by
+project text, source, or language, sort by stars, and use **Show more projects** to
+browse the sample. GitHub search filters do not apply to this collection.
+
+The backend uses Scrapling's HTML selectors and HTTPX downloads, with fixed HTTPS
+source URLs, no redirect following, a 2 MB decoded response limit, and a 20-second
+overall timeout per source. It extracts at most 60 repository cards per source,
+deduplicates repository names case-insensitively, and retains each source link.
+Scraped links are validated as GitHub repository roots; linked pages are not crawled.
+No GitHub credentials or authenticated browser cookies are used for scraping.
+
+Successful source results are cached independently for 15 minutes in process memory.
+Refresh respects the cache. Failed sources can retry after one minute. A failed
+refresh may serve a marked stale result up to 24 hours after its last successful
+fetch; the original fetch timestamp is retained. Partial failures leave other sources
+available. Missing metadata remains unknown. An empty or changed page produces a
+visible source error rather than invented repository data.
+
+These pages provide leads, not verified contribution availability. They may include
+archived projects or stale listings. Use **Explore contribution fit** to fetch the
+current public GitHub evidence and check project status, rules, and issues. No scraped
+HTML is rendered or sent to the AI advisor. The existing trending feed keeps its
+GitHub API polling and SSE behavior.
+
+Existing installations should run `start.bat -InstallDependencies`, or reinstall
+the backend with `pip install -e .` in its virtual environment. No browser binaries,
+service API key, environment changes, or database migration are needed.
+
 ## Setup
 
 Start PostgreSQL and the backend as described in the README. Save and validate a GitHub PAT in Settings. Public repository analysis needs read access to metadata, issues, pull requests, and contents. Existing private-repository reports keep their own broader token requirements. Contribution discovery rejects private repositories.
@@ -18,7 +53,7 @@ OpenAI remains the default for existing installations. The advisor's provider se
 
 For local inference, run `ollama pull llama3.2:3b` and start the Ollama app or `ollama serve`. `OLLAMA_BASE_URL` defaults to `http://127.0.0.1:11434`; it must be reachable from the backend, not the browser. `OLLAMA_MODEL` can name another installed chat model. `AI_TIMEOUT_SECONDS` defaults to 180, accepts 10-600, and covers all providers. Ollama uses a 32,768-token context and 1,400-token output budget; a capable instruction-following model and sufficient memory are recommended for repository evidence. Cloud-backed Ollama models or remote endpoints are not local inference; use a locally downloaded model and the default loopback endpoint when you want local processing.
 
-Guidance goes only to the selected provider, with no automatic fallback. Ollama requests bypass environment HTTP proxies. Failed, empty, blocked, or truncated responses are reported as errors. The adapter uses Ollama `/api/chat`, Gemini `generateContent`, or OpenAI Responses. No new dependency or database migration is needed. GitHub analysis and filters do not require an AI provider.
+Guidance goes only to the selected provider, with no automatic fallback. Ollama requests bypass environment HTTP proxies. Failed, empty, blocked, or truncated responses are reported as errors. The adapter uses Ollama `/api/chat`, Gemini `generateContent`, or OpenAI Responses. Switching AI providers requires no additional dependency or database migration. GitHub analysis and filters do not require an AI provider.
 
 ## What the repository view shows
 
@@ -33,6 +68,7 @@ Unavailable GitHub sections are explicitly marked unavailable, rather than repor
 
 ## API
 
+- `GET /api/contributions/web` — public-page repository leads and per-source provenance, timestamps, cache/stale flags, errors, counts, and sample limits; no GitHub token required.
 - `GET /api/contributions/config` — default provider, provider names/models and configuration status; never returns credentials or server URLs.
 - `GET /api/contributions/search?q=&language=&beginner=true&collection=active&sort=updated&page=1` — repository discovery.
 - `GET /api/contributions/repos/{owner}/{name}` — evidence and calculated metrics.
@@ -45,10 +81,17 @@ cd frontend
 npm run build
 npm run lint
 cd ../backend
-./.venv/Scripts/python -m pytest tests/test_contributions.py tests/test_report_generator.py tests/test_security.py -q
+./.venv/Scripts/python -m pytest tests/test_web_discovery.py tests/test_contributions.py tests/test_report_generator.py tests/test_security.py -q
 ```
 
 The full test suite also includes an application startup health check that requires the configured PostgreSQL database. All provider adapters are tested with mocked responses, including credentials isolation, missing configuration, truncation, and connection failure. Live cloud calls require working keys, model access, and quota. Live Ollama calls require a running server and a pulled model.
+
+Web discovery tests cover source-specific HTML extraction, unsafe-link rejection,
+sample limits, deduplication, concurrent cache reuse, partial outages, stale-result
+expiry, bounded downloads, redirect rejection, and access without a PAT. Live HTML
+fetches were checked for both sources. Browser smoke checks cover source browsing,
+text/language filtering, sorting, pagination, analysis navigation, failed refreshes,
+retry, and a 390-pixel mobile viewport using mocked API responses.
 
 Implementation references: [GitHub community metrics](https://docs.github.com/en/rest/metrics/community), [GitHub pull requests](https://docs.github.com/en/rest/pulls/pulls#list-pull-requests), and [OpenAI text generation](https://developers.openai.com/api/docs/guides/text).
 

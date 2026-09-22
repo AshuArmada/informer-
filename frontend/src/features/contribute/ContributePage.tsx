@@ -6,6 +6,7 @@ import { api, type AIProvider, type DiscoveryOptions, type ContributionConfig, t
 import { cn } from '@/lib/utils'
 import { contributionLink, repositoryName } from './navigation'
 import { DiscoveryCard } from './DiscoveryCard'
+import { WebDiscovery } from './WebDiscovery'
 
 function initialSearch() {
   try {
@@ -23,6 +24,8 @@ function Tag({ children, active = false }: { children: React.ReactNode; active?:
 }
 
 export function ContributePage() {
+  const [discoveryMode, setDiscoveryMode] = useState<'github' | 'web'>('github')
+  const discoveryModeRef = useRef<'github' | 'web'>('github')
   const [draft] = useState(initialSearch)
   const [query, setQuery] = useState(draft.query)
   const [language, setLanguage] = useState(draft.language)
@@ -58,7 +61,7 @@ export function ContributePage() {
       } else {
         controller.current?.abort()
         setLoading(false); setLoadingMore(false); setLoadingRepo(null); setAnalysis(null); setError(null)
-        if (!hasResults.current && ['', 'contribute'].includes(window.location.hash.replace(/^#\/?/, '').split('?')[0])) {
+        if (discoveryModeRef.current === 'github' && !hasResults.current && ['', 'contribute'].includes(window.location.hash.replace(/^#\/?/, '').split('?')[0])) {
           void discover({ q: draft.query.includes('/') ? '' : draft.query, language: draft.language, beginner: draft.beginner, collection: 'active', sort: 'updated' })
         }
       }
@@ -104,6 +107,8 @@ export function ContributePage() {
 
   async function search(event?: FormEvent) {
     event?.preventDefault()
+    setDiscoveryMode('github')
+    discoveryModeRef.current = 'github'
     retry.current = () => { void search() }
     try {
       const name = repositoryName(query)
@@ -142,7 +147,11 @@ export function ContributePage() {
       <div className="mb-5 flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-brand"><Compass className="size-4" /> Find your next contribution</div>
       <h1 className="max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">Good projects.<br />A clear place to start.</h1>
       <p className="mt-4 max-w-xl text-sm leading-6 text-muted-foreground">Discover open source projects, understand how they work, and find an issue you can help with. Get AI guidance grounded in repository activity.</p>
-      <form onSubmit={search} className="mt-7 space-y-4">
+      <div className="mt-6 flex gap-2" role="group" aria-label="Discovery mode">
+        <Button variant={discoveryMode === 'github' ? 'default' : 'outline'} aria-pressed={discoveryMode === 'github'} onClick={() => { discoveryModeRef.current = 'github'; setDiscoveryMode('github') }}>GitHub search</Button>
+        <Button variant={discoveryMode === 'web' ? 'default' : 'outline'} aria-pressed={discoveryMode === 'web'} onClick={() => { cancel(); setError(null); discoveryModeRef.current = 'web'; setDiscoveryMode('web'); window.location.hash = 'contribute' }}>Web discoveries</Button>
+      </div>
+      {discoveryMode === 'github' && <form onSubmit={search} className="mt-7 space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row">
           <div className="relative flex-1"><Search className="absolute left-3 top-3 size-4 text-muted-foreground" /><Input aria-label="Topic or repository" className="h-10 bg-background pl-9" value={query} onChange={e => setQuery(e.target.value)} maxLength={200} placeholder="Search a topic, or paste owner/repository" /></div>
           <select aria-label="Programming language" className={cn(fieldClass, 'sm:w-44')} value={language} onChange={e => setLanguage(e.target.value)}>
@@ -156,7 +165,7 @@ export function ContributePage() {
         </div>
         <label className="flex w-fit cursor-pointer items-center gap-2 text-sm text-muted-foreground"><input type="checkbox" className="size-4 accent-[var(--brand)]" checked={beginner} onChange={e => setBeginner(e.target.checked)} /> Projects with good first issues</label>
         <p className="text-xs text-muted-foreground">Repository links open directly. Filters apply to discovery searches.</p>
-      </form>
+      </form>}
     </section>
 
     {error && <div role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm">{error} <Button variant="outline" onClick={() => { if (retry.current) retry.current(); else void search() }}>Retry request</Button> {/token|permission|settings/i.test(error) && <a href="#settings" className="font-medium text-brand underline">Open Settings</a>}</div>}
@@ -164,7 +173,7 @@ export function ContributePage() {
     {(loading || loadingRepo) && <div role="status" className="flex items-center gap-3 rounded-xl border p-8 text-sm text-muted-foreground"><LoaderCircle className="size-5 animate-spin text-brand" />{loadingRepo ? `Reading activity, guidelines, and issues for ${loadingRepo}…` : 'Finding recently active public projects…'}</div>}
 
     {analysis && !loadingRepo ? <RepositoryDetail key={analysis.repo.full_name} analysis={analysis} onBack={() => { window.location.hash = 'contribute' }} onRefresh={() => inspect(analysis.repo.full_name)} /> : !loading && !loadingRepo && <>
-      {searched ? <section className="space-y-4">
+      {discoveryMode === 'web' ? <WebDiscovery onExplore={openRepo} /> : searched ? <section className="space-y-4">
         <div className="flex justify-end">{applied && <Button variant="outline" disabled={loadingMore} onClick={() => discover(applied)}>Refresh projects</Button>}</div>
         <p className="text-xs text-muted-foreground">Results for {resultDescription}. Change filters and select Find projects to search again.</p>
         <div className="flex items-center justify-between gap-3"><h2 className="text-lg font-semibold">Explore opportunities <span className="ml-2 text-sm font-normal text-muted-foreground">{repos.length} of {total.toLocaleString()} matches</span></h2><span className="text-xs text-muted-foreground">Pushed in the last 90 days</span></div>

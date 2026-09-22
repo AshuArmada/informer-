@@ -14,6 +14,7 @@ from app.config import get_settings
 from app.contributions import analyze_repository, repo_summary
 from app.db import get_db
 from app.github import GitHubTokenNotConfigured, get_github_client
+from app.web_discovery import web_discovery
 
 router = APIRouter(prefix="/api/contributions", tags=["contributions"])
 Owner = Annotated[str, Path(pattern=r"^[A-Za-z0-9][A-Za-z0-9-]{0,38}$")]
@@ -51,6 +52,11 @@ async def config():
     providers = [provider_config(settings, p) for p in ("openai", "ollama", "gemini")]
     return {"ai_configured": provider_config(settings, settings.ai_provider)["configured"],
             "default_provider": settings.ai_provider, "providers": providers}
+
+
+@router.get("/web")
+async def web_projects():
+    return await web_discovery.discover()
 
 
 @router.get("/search")

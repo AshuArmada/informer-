@@ -39,6 +39,28 @@ export interface DiscoveryResults {
   sort: 'updated' | 'stars'
 }
 
+export interface WebSource {
+  id: string
+  name: string
+  url: string
+  signal: string
+  fetched_at: string | null
+  stale: boolean
+}
+
+export interface WebDiscoveryResults {
+  repos: {
+    full_name: string
+    html_url: string
+    description: string | null
+    language: string | null
+    stars: number | null
+    sources: WebSource[]
+  }[]
+  sources: (WebSource & { cached: boolean; error: string | null; repo_count: number; sample_capped: boolean })[]
+  cache_seconds: number
+}
+
 export interface ContributionIssue {
   number: number
   title: string
@@ -197,6 +219,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  getWebDiscoveries: (signal?: AbortSignal) => request<WebDiscoveryResults>('/contributions/web', { signal }),
   getContributionConfig: (signal?: AbortSignal) => request<ContributionConfig>('/contributions/config', { signal }),
   searchContributions: (options: DiscoveryOptions, page = 1, signal?: AbortSignal) =>
     request<DiscoveryResults>(

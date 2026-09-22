@@ -7,15 +7,80 @@ A personal, local-only AI assistant for finding open source contributions.
 3. **Saved projects** — bookmark repositories for later.
 4. **Repo reports** — issues grouped by assignee and PR counts, emailed on demand or on a schedule.
 
-Configure the GitHub PAT in **Settings**. The default **Contribute** page works with GitHub alone; AI guidance supports local Ollama, Google Gemini, and OpenAI. See [Contribution discovery](./docs/contributions.md) for setup and metric definitions.
+**Web discoveries** adds web scraping with [Scrapling](https://scrapling.readthedocs.io/en/latest/parsing/main_classes.html): browse popular and newcomer-friendly repositories from public discovery pages, filter by source or language, and open any project for contribution analysis.
+
+Configure the GitHub PAT in **Settings** for repository search and analysis. Web discovery listings need no token or AI key; AI guidance supports local Ollama, Google Gemini, and OpenAI. See [Contribution discovery](./docs/contributions.md) for setup and metric definitions.
 
 See [CLAUDE.md](./CLAUDE.md) for the full architecture and design decisions.
 
 ## Prerequisites
 
 - Python 3.12+
-- Node.js 20+
+- Node.js 20.19+ or 22.12+
 - Docker Desktop
+
+## Quick start (Windows)
+
+Start Docker Desktop, then double-click `start.bat` or run it from a terminal:
+
+```powershell
+.\start.bat
+```
+
+The launcher creates the Python virtual environment, installs missing dependencies,
+creates `backend/.env` with an encryption key on first run, starts PostgreSQL and
+Adminer, applies migrations, and starts the API and frontend. Existing `.env`
+settings are preserved. Open http://127.0.0.1:5173 when it reports ready.
+
+Keep the terminal open; press **Ctrl+C** to stop the API and frontend. Logs are in
+`logs/`. Docker services keep running; use `docker compose stop db adminer` to stop
+them without removing database data.
+
+After dependency changes, run `.\start.bat -InstallDependencies` to reinstall them.
+The manual setup steps below remain available for other platforms.
+
+## Web discovery sources
+
+Open **Contribute → Web discoveries** to browse these pages:
+
+| Source | What it helps discover |
+| --- | --- |
+| [GitHub Trending](https://github.com/trending) | Repositories attracting attention today. |
+| [Good First Issue](https://goodfirstissue.dev/) | Projects listed for first-time open source contributions. |
+
+Cards include source links, descriptions, languages, and source-reported star
+counts. Search the fetched sample by project name or description, filter by source
+and language, or sort by stars. Duplicate repositories appear once with all their
+source labels. **Explore contribution fit** opens the existing live GitHub analysis
+of contribution rules, activity, PR metrics, and open issues. Popularity or a listing
+does not guarantee current beginner issues or maintainer acceptance.
+
+For an existing installation, install the new dependency and restart:
+
+```powershell
+.\start.bat -InstallDependencies
+```
+
+Alternatively, run `pip install -e .` inside the backend virtual environment from
+`backend/`, then restart the backend. No new environment variables, scraping service
+key, browser download, or database migration is required. Scrapling parses the HTML;
+the existing HTTPX library downloads the two fixed public pages asynchronously.
+
+Each source contributes at most 60 projects per fetch. Successful results are cached
+in memory for 15 minutes; **Refresh sources** respects this interval. Failed sources
+retry on the next request after one minute, with a visible status. If available,
+the last successful results remain visible for up to 24 hours and are marked as
+older cached results. Restarting the backend clears this cache.
+
+Source timestamps describe when Informer fetched a page, not when its publisher
+updated it. Star counts may be rounded or outdated. Source markup changes, rate
+limits, or outages can make an individual source unavailable. The app fetches only
+the listed pages, does not follow redirects or crawl linked repositories, and sends
+no GitHub token to discovery sources. The existing SSE trending feed continues to
+use GitHub API snapshots.
+
+API: `GET /api/contributions/web` returns repositories with source provenance,
+per-source fetch timestamps, cache/stale flags, errors, and sample-limit indicators.
 
 ## 1. Start the database
 
