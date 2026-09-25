@@ -73,9 +73,17 @@ try {
     Invoke-Checked $python @('-c', "import sys; sys.exit(0 if sys.version_info >= (3, 12) else 'Python 3.12+ is required.')")
     & $python -c "import importlib.metadata, sys; sys.exit(0 if any(d.metadata['Name'] == 'informer-backend' for d in importlib.metadata.distributions()) else 1)"
     $needsBackendInstall = $LASTEXITCODE -ne 0
-    if ($newVenv -or $needsBackendInstall -or $InstallDependencies) {
+    $backendManifestHash = (Get-FileHash -LiteralPath (Join-Path $backend 'pyproject.toml') -Algorithm SHA256).Hash
+    $backendInstallStamp = Join-Path $backend '.venv\informer-dependencies.sha256'
+    $backendDependenciesChanged = -not (Test-Path -LiteralPath $backendInstallStamp)
+    if (-not $backendDependenciesChanged) {
+        $backendDependenciesChanged = ([System.IO.File]::ReadAllText($backendInstallStamp).Trim() -ne $backendManifestHash)
+    }
+    if ($newVenv -or $needsBackendInstall -or $backendDependenciesChanged -or $InstallDependencies) {
         Write-Host 'Installing backend dependencies...'
         Invoke-Checked $python @('-m', 'pip', 'install', '-e', $backend)
+        # Record only successful installs, so interrupted/failed installs retry next time.
+        [System.IO.File]::WriteAllText($backendInstallStamp, $backendManifestHash)
     }
 
     # Only create a key for a new .env. Existing keys protect stored credentials.

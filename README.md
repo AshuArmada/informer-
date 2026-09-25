@@ -36,7 +36,10 @@ Keep the terminal open; press **Ctrl+C** to stop the API and frontend. Logs are 
 `logs/`. Docker services keep running; use `docker compose stop db adminer` to stop
 them without removing database data.
 
-After dependency changes, run `.\start.bat -InstallDependencies` to reinstall them.
+The launcher automatically reinstalls backend dependencies when `backend/pyproject.toml`
+changes (including the Scrapling dependency). Run `.\start.bat -InstallDependencies`
+to force a reinstall of both backend and frontend dependencies, or after frontend
+dependency changes.
 The manual setup steps below remain available for other platforms.
 
 ## Web discovery sources

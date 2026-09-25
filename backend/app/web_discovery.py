@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import math
 import re
 import time
 from dataclasses import dataclass
@@ -64,10 +65,12 @@ def text_content(node: Selector, query: str) -> str | None:
 def star_count(value: str | None) -> int | None:
     if not value:
         return None
-    match = re.fullmatch(r"([\d,]+(?:\.\d+)?)\s*([kKmM]?)", value.strip())
+    match = re.fullmatch(r"([0-9]+(?:\.[0-9]+)?|[0-9]{1,3}(?:,[0-9]{3})+(?:\.[0-9]+)?)\s*([kKmM]?)", value.strip())
     if not match:
         return None
-    return round(float(match[1].replace(",", "")) * {"": 1, "k": 1000, "m": 1_000_000}[match[2].lower()])
+    count = float(match[1].replace(",", "")) * {"": 1, "k": 1000, "m": 1_000_000}[match[2].lower()]
+    # Unknown source data must not fail the whole source or exceed JS integer precision.
+    return round(count) if math.isfinite(count) and count <= 2**53 - 1 else None
 
 
 def parse_page(source: Source, html: str) -> list[dict]:
@@ -124,7 +127,10 @@ class WebDiscovery:
         now = time.monotonic()
         previous = self.cache.get(source.id)
         if previous and now < previous["retry_at"]:
-            return copy.deepcopy(previous["result"]) | {"cached": True}
+            result = copy.deepcopy(previous["result"]) | {"cached": True}
+            if result["stale"] and now - previous["success_at"] >= STALE_SECONDS:
+                result.update(repos=[], fetched_at=None, stale=False)
+            return result
         result = {"id": source.id, "name": source.name, "url": source.url, "signal": source.signal,
                   "repos": [], "fetched_at": None, "cached": False, "stale": False, "error": None}
         try:
@@ -142,7 +148,7 @@ class WebDiscovery:
             else:
                 result["error"] = "Source could not be reached. Try again later."
             success_at = previous["success_at"] if previous else None
-            if success_at is not None and now - success_at < STALE_SECONDS:
+            if success_at is not None and time.monotonic() - success_at < STALE_SECONDS:
                 result.update(repos=copy.deepcopy(previous["result"]["repos"]),
                               fetched_at=previous["result"]["fetched_at"], stale=True, cached=True)
             retry_at = time.monotonic() + FAILURE_RETRY_SECONDS

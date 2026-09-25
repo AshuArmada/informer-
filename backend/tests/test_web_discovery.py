@@ -62,6 +62,55 @@ def test_star_counts_preserve_unknown(value, expected):
     assert web.star_count(value) == expected
 
 
+@pytest.mark.parametrize("value", [",", "1,,234", "1,23", "9" * 400, "9007199254740992"])
+def test_malformed_star_counts_do_not_discard_repository(value):
+    repo = web.parse_page(web.SOURCES[0], TRENDING.replace("12,345", value))[0]
+    assert repo["full_name"] == "Org/Project"
+    assert repo["stars"] is None
+
+
+@pytest.mark.asyncio
+async def test_stale_expiry_applies_during_failure_retry_cooldown(monkeypatch):
+    clock = [100.0]
+    calls = []
+    monkeypatch.setattr(web.time, "monotonic", lambda: clock[0])
+    async def fetch(client, source):
+        calls.append(source.id)
+        if clock[0] > 100:
+            raise httpx.ConnectError("offline")
+        return TRENDING if source.id == "github-trending" else FIRST_ISSUE
+    monkeypatch.setattr(web, "fetch_page", fetch)
+    service = web.WebDiscovery()
+    await service.discover()
+    clock[0] += web.STALE_SECONDS - 1
+    assert all(s["stale"] for s in (await service.discover())["sources"])
+    calls_before = len(calls)
+    clock[0] += 1
+    expired = await service.discover()
+    assert expired["repos"] == []
+    assert all(s["fetched_at"] is None and not s["stale"] for s in expired["sources"])
+    assert len(calls) == calls_before  # Expiry must not bypass the failure cooldown.
+
+
+@pytest.mark.asyncio
+async def test_stale_expiry_applies_when_refresh_crosses_deadline(monkeypatch):
+    clock = [100.0]
+    monkeypatch.setattr(web.time, "monotonic", lambda: clock[0])
+    async def fetch(client, source):
+        if clock[0] > 100:
+            clock[0] += 2
+            raise httpx.ConnectError("offline")
+        return TRENDING
+    monkeypatch.setattr(web, "fetch_page", fetch)
+    service = web.WebDiscovery()
+    async with httpx.AsyncClient() as client:
+        await service._source(client, web.SOURCES[0])
+        clock[0] += web.STALE_SECONDS - 1
+        expired = await service._source(client, web.SOURCES[0])
+    assert expired["repos"] == []
+    assert expired["fetched_at"] is None
+
+
 @pytest.mark.asyncio
 async def test_deduplicates_provenance_and_coalesces_concurrent_requests(monkeypatch):
     calls = []
