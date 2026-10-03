@@ -145,6 +145,7 @@ def api_client():
     app.include_router(routes.router)
     github = FakeGitHub()
     app.dependency_overrides[routes.client_dependency] = lambda: github
+    app.dependency_overrides[routes.effective_settings] = lambda: routes.get_settings()
     with TestClient(app) as client:
         yield client, github
 
@@ -174,6 +175,49 @@ def test_discovery_cards_new_collection_and_pagination(api_client):
     assert client.get("/api/contributions/search?page=3").json()["has_more"] is False
     assert client.get("/api/contributions/search?page=26").status_code == 422
     assert client.get("/api/contributions/search?collection=unknown").status_code == 422
+
+
+def test_topic_license_stars_and_activity_filters(api_client):
+    client, _ = api_client
+    response = client.get("/api/contributions/search", params={"topic": "accessibility", "license": "mit", "min_stars": 250, "activity_days": 7})
+    assert response.status_code == 200
+    query = response.json()["query"]
+    assert "topic:accessibility" in query and "license:mit" in query and "stars:>=250" in query
+    assert response.json()["issue_filtered"] is False
+    assert client.get("/api/contributions/search?topic=foo%20is:private").status_code == 422
+    assert client.get("/api/contributions/search?q=is:private").status_code == 422
+    assert client.get("/api/contributions/search?min_stars=-1").status_code == 422
+    assert client.get("/api/contributions/search?activity_days=8").status_code == 422
+    for days in (7, 30, 90, 365):
+        assert client.get(f"/api/contributions/search?activity_days={days}").status_code == 200
+
+
+def test_custom_issue_filters_check_live_open_issues_and_preserve_candidate_pagination(api_client):
+    client, github = api_client
+    original = github.get_json
+    queries = []
+    async def get_json(path, params=None):
+        if path == "/search/issues":
+            queries.append(params["q"])
+            assert params["per_page"] == 1
+            return {"total_count": 3, "incomplete_results": False}
+        return await original(path, params)
+    github.get_json = get_json
+    response = client.get("/api/contributions/search", params={"issue_label": "help wanted", "unassigned": True}).json()
+    assert queries == ['repo:org/project is:issue is:open label:"help wanted" no:assignee']
+    assert response["repos"][0]["matching_issues"] == 3
+    assert response["issue_filtered"] is True
+    assert response["scanned_count"] == 1
+    assert response["total_count"] == 26 and response["has_more"] is True
+
+
+def test_failed_issue_checks_are_not_fabricated_as_matches(api_client):
+    client, github = api_client
+    github.failed = {"/search/issues"}
+    result = client.get("/api/contributions/search", params={"issue_label": "bug"}).json()
+    assert result["repos"] == [] and result["has_more"] is True
+    assert "Could not check issues" in result["warnings"][0]
+    assert client.get('/api/contributions/search', params={"issue_label": 'bug" is:closed'}).status_code == 422
 
 
 def test_ai_setup_is_explicit(api_client, monkeypatch):

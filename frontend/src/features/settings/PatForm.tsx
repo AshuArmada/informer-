@@ -14,6 +14,13 @@ export function PatForm() {
   const [saving, setSaving] = useState(false)
   const [validating, setValidating] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [confirmRemove, setConfirmRemove] = useState(false)
+
+  const handleRemove = async () => {
+    setSaving(true); setActionError(null)
+    try { setStatus(await api.removeToken()); setTokenInput(''); setConfirmRemove(false) }
+    catch (err) { setActionError((err as Error).message) } finally { setSaving(false) }
+  }
 
   const refresh = () => {
     setLoadError(null)
@@ -104,6 +111,7 @@ export function PatForm() {
             value={tokenInput}
             onChange={(e) => setTokenInput(e.target.value)}
             autoComplete="off"
+            maxLength={512}
           />
           <Button onClick={handleSave} disabled={saving || validating || !tokenInput.trim()}>
             {saving && <Loader2 className="size-4 animate-spin" />}
@@ -112,9 +120,9 @@ export function PatForm() {
         </div>
         <p className="text-xs text-muted-foreground">
           Accepts classic (<code>ghp_…</code>) and fine-grained (<code>github_pat_…</code>) tokens.
-          Needs read access to repos, issues, and pull requests — classic tokens need the{' '}
-          <code>repo</code> scope; fine-grained tokens need Metadata, Issues, Pull requests, and
-          Contents read permissions. Stored encrypted; never shown again in full.
+          Public discovery does not need a classic token’s broad repo scope. For private reports,
+          prefer a fine-grained token limited to selected repositories with Metadata, Issues,
+          Pull requests, and Contents read permissions. Stored encrypted; never shown again in full.
         </p>
       </div>
 
@@ -124,6 +132,8 @@ export function PatForm() {
             {validating && <Loader2 className="size-4 animate-spin" />}
             Validate token
           </Button>
+          <Button variant="ghost" className="ml-2" disabled={saving || validating} onClick={() => setConfirmRemove(!confirmRemove)}>Remove token</Button>
+          {confirmRemove && <div className="mt-3 rounded-lg border p-3"><p className="mb-3 text-sm text-muted-foreground">Remove this saved token? GitHub search and reports will need a new token.</p><Button variant="destructive" disabled={saving || validating} onClick={handleRemove}>Remove saved token</Button></div>}
         </div>
       )}
 

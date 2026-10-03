@@ -2,6 +2,34 @@
 
 Open **Contribute**, the app's default view. Search a topic, select a programming language, and optionally require projects with good first issues. The page automatically loads a discovery feed. Search returns 12 public, non-archived, non-fork repositories per page, pushed in the last 90 days. Choose Active projects or New projects (also created in the last 90 days), and sort by recent updates or stars. Load more adds the next page using the applied filters, up to 300 matches. Refresh projects fetches the first page again. Cards show language, stars, topics, license, creation date, last push, and open issues plus PRs; the combined count is not an issue-only count. A good-first-issue badge appears when that discovery filter was applied. Rules and merge statistics load when opening project analysis. Enter `owner/repository` or a GitHub repository URL to inspect a specific project directly; discovery filters do not apply to direct inspection.
 
+## Repository categories and filters
+
+In GitHub search, **Refine your search** adds topic tags, arbitrary open-issue labels,
+unassigned issues, license, minimum stars, and last-push windows of 7/30/90/365 days.
+The default window remains 90 days; New projects always means created within 90 days.
+All selected filters combine. Search accepts plain text; use the controls for
+qualifiers. Quick starts reset filters to an issue category. Clicking a card's topic
+starts a fresh search for that tag. Draft filters persist for the browser session.
+
+Repository search returns up to 12 candidates at a time. Custom issue labels and
+assignment availability are verified through issue-only open-issue searches for each
+candidate, with at most three concurrent requests. The returned `total_count` is the
+candidate count **before** those issue filters. `scanned_count` records checked
+candidates and `matching_issues` on cards records matching open issues. A batch can
+have no matches even when more candidates remain. Load more checks the next batch;
+pagination stays bounded to the first 300 repository candidates. Failed checks omit
+that candidate and return warnings, never fabricated counts. This uses additional
+GitHub search quota and can hit upstream rate limits.
+
+**Group by** organizes only loaded matches by language, first topic tag, or license.
+It does not imply a complete inventory of that category across GitHub.
+
+Additional search parameters: `topic`, `license`, `min_stars`, `activity_days`,
+`issue_label`, and `unassigned`. Provider management uses GET/PUT/DELETE at
+`/api/settings/providers` and POST at `/api/settings/providers/{provider}/test`.
+`DELETE /api/settings` removes the GitHub token. All mutating requests require
+the protection headers described in [local application security](./security.md).
+
 ## Web discoveries
 
 Select **Web discoveries** on the Contribute page to browse a separate collection
@@ -41,7 +69,12 @@ service API key, environment changes, or database migration are needed.
 
 Start PostgreSQL and the backend as described in the README. Save and validate a GitHub PAT in Settings. Public repository analysis needs read access to metadata, issues, pull requests, and contents. Existing private-repository reports keep their own broader token requirements. Contribution discovery rejects private repositories.
 
-For AI guidance, configure providers in `backend/.env` and restart the backend:
+For AI guidance, use **Settings → AI connections** to save provider keys, models,
+timeout, and default selection. Settings take effect on new requests immediately.
+Keys stay encrypted on the server. Blank key inputs preserve the saved credential;
+the removal checkbox disables that provider, including environment fallback.
+Connection tests check credentials/connectivity without generating advice.
+Alternatively, set installation defaults in `backend/.env` and restart the backend:
 
 | Provider | Default selection | Required configuration | Default model |
 | --- | --- | --- | --- |
@@ -84,7 +117,7 @@ cd ../backend
 ./.venv/Scripts/python -m pytest tests/test_web_discovery.py tests/test_contributions.py tests/test_report_generator.py tests/test_security.py -q
 ```
 
-The full test suite also includes an application startup health check that requires the configured PostgreSQL database. All provider adapters are tested with mocked responses, including credentials isolation, missing configuration, truncation, and connection failure. Live cloud calls require working keys, model access, and quota. Live Ollama calls require a running server and a pulled model.
+The automated suite isolates health routing from startup jobs and does not need a running database. All provider adapters are tested with mocked responses, including credentials isolation, missing configuration, truncation, and connection failure. Live cloud calls require working keys, model access, and quota. Live Ollama calls require a running server and a pulled model.
 
 Web discovery tests cover source-specific HTML extraction, unsafe-link rejection,
 sample limits, deduplication, concurrent cache reuse, partial outages, stale-result

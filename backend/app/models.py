@@ -19,6 +19,13 @@ class AppSettings(Base):
     token_updated_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class ProviderSettings(Base):
+    __tablename__ = "provider_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    encrypted_payload: Mapped[str] = mapped_column(Text)
+
+
 class Snapshot(Base):
     """One polling snapshot of a repo's star count, used to compute trending velocity."""
 

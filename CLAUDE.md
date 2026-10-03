@@ -1,5 +1,24 @@
 # Informer
 
+## Repository filters and secure connections
+
+GitHub discovery supports topic, custom open-issue label, unassigned issues, license,
+minimum stars, and 7/30/90/365-day activity windows. Loaded cards group by language,
+first topic, or license. Issue filters check each 12-candidate page; total_count is
+the pre-issue-filter count. See docs/contributions.md for limits and parameters.
+
+Settings now manages AI keys/models/default provider/timeout/local Ollama URL in an
+encrypted singleton provider_settings table (migration e2c671a309bf). Runtime
+configuration combines trusted .env defaults with encrypted UI overrides; omitted
+keys preserve secrets and empty keys disable environment fallback. These changes
+supersede the older .env-only provider setup notes below. SMTP stays in .env.
+
+The API now enforces local client/Host/origin checks, a custom header and JSON for
+mutations, body and request rate limits, security headers, and redacted validation
+errors. Vite supplies UI CSP/security headers; Docker ports bind to loopback.
+There is still no multi-user authentication. See docs/security.md for the threat
+model, deployment limits, and browser/provider protections.
+
 ## Contribution discovery (current direction)
 
 Web discoveries adds a user-requested scraping collection alongside GitHub API search. `app/web_discovery.py` downloads the fixed GitHub Trending and Good First Issue pages using HTTPX and parses repository cards with Scrapling. `GET /api/contributions/web` needs no PAT and returns bounded source samples with provenance, per-source cache status, errors, and stale timestamps. The Contribute page offers source/language/text filters and links into existing live GitHub analysis. Listings are leads, not verified contribution availability. This supersedes the historical no-scraping decision below for this collection only; the original SSE trending feed still uses GitHub API snapshots. See README and docs/contributions.md for cache limits and setup.
