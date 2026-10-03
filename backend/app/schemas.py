@@ -1,4 +1,7 @@
-from pydantic import BaseModel
+from typing import Literal
+import re
+
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class SettingsStatus(BaseModel):
@@ -93,6 +96,14 @@ class ReportResponse(BaseModel):
 class SendReportRequest(BaseModel):
     email: str
 
+    @field_validator("email")
+    @classmethod
+    def valid_email(cls, value: str) -> str:
+        value = value.strip()
+        if not re.fullmatch(r"[^\s@]+@[^\s@]+", value):
+            raise ValueError("Enter a valid recipient email address.")
+        return value
+
 
 class SendReportResponse(BaseModel):
     status: str  # "sent" | "failed"
@@ -112,3 +123,20 @@ class ReportSchedule(BaseModel):
     time: str  # "HH:MM" 24h
     day_of_week: int | None  # 0=Mon..6=Sun (weekly only)
     email: str | None
+
+
+class ReportScheduleUpdate(ReportSchedule):
+    cadence: Literal["daily", "weekly"]
+    time: str = Field(pattern=r"^([01][0-9]|2[0-3]):[0-5][0-9]$")
+    day_of_week: int | None = Field(default=None, ge=0, le=6)
+
+    @model_validator(mode="after")
+    def valid_schedule(self):
+        self.email = self.email.strip() if self.email else None
+        if self.email:
+            self.email = SendReportRequest(email=self.email).email
+        if self.enabled and not self.email:
+            raise ValueError("An enabled schedule needs a recipient email address.")
+        if self.enabled and self.cadence == "weekly" and self.day_of_week is None:
+            raise ValueError("Select a day for the weekly schedule.")
+        return self

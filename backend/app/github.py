@@ -74,6 +74,10 @@ class GitHubClient:
         resp = await self._get("/user")
         return resp.json()
 
+    async def get_json(self, path: str, params: dict | None = None) -> dict | list:
+        """Read a single bounded API page."""
+        return (await self._get(path, params)).json()
+
     async def search_repositories(
         self, query: str, sort: str = "stars", order: str = "desc", per_page: int = 100
     ) -> list[dict]:

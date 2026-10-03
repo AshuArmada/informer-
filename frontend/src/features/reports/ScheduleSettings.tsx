@@ -16,13 +16,15 @@ export function ScheduleSettings() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
+    setError(null)
     api
       .getSchedule()
       .then(setSchedule)
       .catch((e: Error) => setError(e.message))
-  }, [])
+  }, [attempt])
 
   const patch = (p: Partial<ReportSchedule>) => {
     setSchedule((s) => (s ? { ...s, ...p } : s))
@@ -45,11 +47,12 @@ export function ScheduleSettings() {
   }
 
   if (!schedule) {
+    if (error) return <div role="alert"><p className="text-sm text-destructive">{error}</p><Button variant="outline" onClick={() => setAttempt(n => n + 1)}>Retry schedule</Button></div>
     return <p className="text-sm text-muted-foreground">Loading…</p>
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <fieldset disabled={saving} className="flex min-w-0 flex-col gap-4">
       <div className="flex items-center justify-between">
         <div className="flex flex-col">
           <Label htmlFor="sched-enabled">Recurring digest</Label>
@@ -136,6 +139,6 @@ export function ScheduleSettings() {
         )}
         {error && <span className="text-sm text-destructive">{error}</span>}
       </div>
-    </div>
+    </fieldset>
   )
 }

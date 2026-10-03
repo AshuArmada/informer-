@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 
-export const VIEWS = ['trending', 'saved', 'reports', 'settings'] as const
+export const VIEWS = ['contribute', 'trending', 'saved', 'reports', 'settings'] as const
 export type View = (typeof VIEWS)[number]
 
 function currentView(): View {
-  const hash = window.location.hash.replace(/^#\/?/, '') as View
-  return VIEWS.includes(hash) ? hash : 'trending'
+  const hash = window.location.hash.replace(/^#\/?/, '').split('?')[0] as View
+  return VIEWS.includes(hash) ? hash : 'contribute'
 }
 
 /** Set the active view by updating the URL hash. Safe to call from anywhere. */

@@ -4,33 +4,38 @@ import { cn } from '@/lib/utils'
 import { languageColor } from '@/lib/languageColors'
 import { type TrendingRepo } from '@/lib/api'
 
+/** Star gain/loss since the last feed update. `null` = no earlier snapshot to compare against. */
 function DeltaPill({ delta }: { delta: number | null }) {
   if (delta === null) {
     return (
-      <span className="rounded-full border border-dashed px-2 py-0.5 text-xs font-medium text-muted-foreground">
+      <span
+        title="First seen this cycle — no earlier snapshot to compare against"
+        className="rounded-full border border-dashed px-2 py-0.5 text-xs font-medium text-muted-foreground"
+      >
         new
       </span>
     )
   }
-  if (delta > 0) {
-    return (
-      <span className="flex items-center gap-0.5 rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-        <ArrowUp className="size-3" strokeWidth={2.5} />
-        {delta.toLocaleString()}
-      </span>
-    )
-  }
-  if (delta < 0) {
-    return (
-      <span className="flex items-center gap-0.5 rounded-full bg-red-500/10 px-2 py-0.5 text-xs font-semibold text-red-600 dark:text-red-400">
-        <ArrowDown className="size-3" strokeWidth={2.5} />
-        {Math.abs(delta).toLocaleString()}
-      </span>
-    )
-  }
+
+  const Icon = delta === 0 ? Minus : delta > 0 ? ArrowUp : ArrowDown
+  const label =
+    delta === 0
+      ? 'No new stars since the last update'
+      : `${Math.abs(delta).toLocaleString()} stars ${delta > 0 ? 'gained' : 'lost'} since the last update`
+
   return (
-    <span className="flex items-center gap-0.5 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-      <Minus className="size-3" />0
+    <span
+      title={label}
+      className={cn(
+        'flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums',
+        delta === 0 && 'bg-muted font-medium text-muted-foreground',
+        delta > 0 && 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+        delta < 0 && 'bg-red-500/10 text-red-600 dark:text-red-400',
+      )}
+    >
+      <Icon className="size-3" strokeWidth={delta === 0 ? 2 : 2.5} aria-hidden />
+      <span aria-hidden>{Math.abs(delta).toLocaleString()}</span>
+      <span className="sr-only">{label}</span>
     </span>
   )
 }
@@ -39,20 +44,24 @@ function DeltaPill({ delta }: { delta: number | null }) {
 function RankChange({ delta }: { delta: number | null }) {
   if (!delta) return null
   const up = delta > 0
+  const label = up
+    ? `Up ${delta} place${delta === 1 ? '' : 's'} since the last update`
+    : `Down ${Math.abs(delta)} place${delta === -1 ? '' : 's'} since the last update`
   return (
     <span
-      title={up ? `Up ${delta} since last update` : `Down ${Math.abs(delta)} since last update`}
+      title={label}
       className={cn(
         'flex items-center gap-0.5 text-[10px] font-bold tabular-nums transition-colors',
         up ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400',
       )}
     >
       {up ? (
-        <ArrowUp className="size-2.5" strokeWidth={3} />
+        <ArrowUp className="size-2.5" strokeWidth={3} aria-hidden />
       ) : (
-        <ArrowDown className="size-2.5" strokeWidth={3} />
+        <ArrowDown className="size-2.5" strokeWidth={3} aria-hidden />
       )}
-      {Math.abs(delta)}
+      <span aria-hidden>{Math.abs(delta)}</span>
+      <span className="sr-only">{label}</span>
     </span>
   )
 }
@@ -91,7 +100,7 @@ export function RepoCard({
             disabled={saving}
             aria-label={`Save ${repo.repo_full_name}`}
             title="Save to your dashboard"
-            className="relative z-10 flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-brand before:absolute before:left-1/2 before:top-1/2 before:size-11 before:-translate-x-1/2 before:-translate-y-1/2 before:content-['']"
+            className="relative z-10 flex size-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-brand disabled:cursor-default before:absolute before:left-1/2 before:top-1/2 before:size-11 before:-translate-x-1/2 before:-translate-y-1/2 before:content-['']"
           >
             <Bookmark className={cn('size-4', saving && 'animate-pulse')} />
           </button>

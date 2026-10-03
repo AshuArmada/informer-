@@ -1,59 +1,299 @@
+{#
+  Informer report email.
+
+  Constraints this template is written against:
+    - No <style> blocks, no flexbox/grid, no JS. Gmail strips <head>, Outlook uses Word
+      for layout, so everything is inline styles on nested <table>s.
+    - Charts are tables with background-colored cells and percentage widths — the only
+      charting technique that survives every client without images.
+#}
+{%- set repos = report.repos -%}
+{%- set ok_repos = repos | rejectattr('error') | list -%}
+{%- set total_issues = repos | sum(attribute='open_issue_count') -%}
+{%- set total_open_prs = repos | sum(attribute='pr_counts.open') -%}
+{%- set total_merged_prs = repos | sum(attribute='pr_counts.merged') -%}
+{%- set total_closed_prs = repos | sum(attribute='pr_counts.closed') -%}
+{%- set unassigned = ok_repos | map(attribute='groups') | sum(start=[])
+      | selectattr('assignee', 'none') | sum(attribute='count') -%}
+{%- set failed = repos | selectattr('error') | list -%}
+{#- issues shown per assignee before collapsing into a "+N more" link -#}
+{%- set issue_limit = 6 -%}
+{%- set ink = '#16181d' -%}
+{%- set muted = '#6b7280' -%}
+{%- set line = '#e4e7ec' -%}
+{%- set accent = '#4f46e5' -%}
+{%- set pr_open = '#1f883d' -%}
+{%- set pr_merged = '#8250df' -%}
+{%- set pr_closed = '#b42318' -%}
 <!doctype html>
-<html>
-  <body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#18181b;">
-    <div style="max-width:640px;margin:0 auto;padding:24px;">
-      <h1 style="font-size:20px;font-weight:600;margin:0 0 4px;">Informer report</h1>
-      <p style="margin:0 0 24px;color:#71717a;font-size:13px;">
-        Generated {{ report.generated_at }}
-      </p>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <meta name="supported-color-schemes" content="light" />
+    <title>Informer report</title>
+  </head>
+  <body style="margin:0;padding:0;background:#f4f5f7;-webkit-font-smoothing:antialiased;">
+    {#- inbox preview line; hidden in the body itself -#}
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;height:0;width:0;">
+      {{ total_issues }} open issue{{ '' if total_issues == 1 else 's' }} across
+      {{ repos | length }} repo{{ '' if repos | length == 1 else 's' }} ·
+      {{ total_open_prs }} PR{{ '' if total_open_prs == 1 else 's' }} awaiting review
+    </div>
 
-      {% if not report.repos %}
-        <p style="color:#71717a;">No repositories are being tracked yet.</p>
-      {% endif %}
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+           style="background:#f4f5f7;">
+      <tr>
+        <td align="center" style="padding:24px 12px 40px;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="640"
+                 style="width:100%;max-width:640px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
 
-      {% for repo in report.repos %}
-        <div style="background:#ffffff;border:1px solid #e4e4e7;border-radius:10px;padding:16px;margin-bottom:16px;">
-          <a href="{{ repo.html_url }}" style="font-size:15px;font-weight:600;color:#4f46e5;text-decoration:none;">
-            {{ repo.full_name }}
-          </a>
+            <!-- ── Header ─────────────────────────────────────────────── -->
+            <tr>
+              <td style="background:{{ ink }};border-radius:12px 12px 0 0;padding:24px 28px;">
+                <p style="margin:0 0 10px;font-size:11px;font-weight:700;letter-spacing:.14em;
+                          text-transform:uppercase;color:#8b8fa3;">Informer</p>
+                <h1 style="margin:0;font-size:22px;line-height:1.25;font-weight:600;color:#ffffff;">
+                  Repository report
+                </h1>
+                <p style="margin:6px 0 0;font-size:13px;color:#9ca3af;">
+                  {{ report.generated_at | pretty_date }}
+                </p>
+              </td>
+            </tr>
 
-          {% if repo.error %}
-            <p style="color:#dc2626;font-size:13px;margin:8px 0 0;">{{ repo.error }}</p>
-          {% else %}
-            <p style="margin:4px 0 12px;font-size:13px;color:#71717a;">
-              {{ repo.open_issue_count }} open issue{{ '' if repo.open_issue_count == 1 else 's' }}
-              &nbsp;·&nbsp;
-              PRs: {{ repo.pr_counts.open }} open / {{ repo.pr_counts.merged }} merged / {{ repo.pr_counts.closed }} closed
-            </p>
+            <!-- ── Summary tiles ──────────────────────────────────────── -->
+            <tr>
+              <td style="background:#ffffff;border-left:1px solid {{ line }};border-right:1px solid {{ line }};
+                         padding:20px 20px 4px;">
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                  <tr>
+                    {%- set tiles = [
+                      ('Repos', repos | length, ink),
+                      ('Open issues', total_issues, ink),
+                      ('Open PRs', total_open_prs, pr_open),
+                      ('Unassigned', unassigned, accent if unassigned else ink),
+                    ] -%}
+                    {% for label, value, color in tiles %}
+                      <td width="25%" align="center" valign="top"
+                          style="padding:8px 4px 14px;border-left:{{ '1px solid ' ~ line if not loop.first else '0' }};">
+                        <div style="font-size:26px;line-height:1.1;font-weight:700;color:{{ color }};">{{ value }}</div>
+                        <div style="margin-top:4px;font-size:11px;font-weight:600;letter-spacing:.05em;
+                                    text-transform:uppercase;color:{{ muted }};">{{ label }}</div>
+                      </td>
+                    {% endfor %}
+                  </tr>
+                </table>
+              </td>
+            </tr>
 
-            {% for group in repo.groups %}
-              <div style="margin-bottom:10px;">
-                <div style="font-size:13px;font-weight:600;margin-bottom:4px;">
-                  {{ group.assignee if group.assignee else 'Unassigned' }}
-                  <span style="color:#a1a1aa;font-weight:400;">({{ group.count }})</span>
-                </div>
-                <ul style="margin:0;padding-left:18px;">
-                  {% for issue in group.issues %}
-                    <li style="font-size:13px;margin-bottom:2px;">
-                      <a href="{{ issue.html_url }}" style="color:#3f3f46;text-decoration:none;">
-                        #{{ issue.number }} {{ issue.title }}
-                      </a>
-                    </li>
-                  {% endfor %}
-                </ul>
-              </div>
+            {% if not repos %}
+              <tr>
+                <td style="background:#ffffff;border:1px solid {{ line }};border-top:0;border-radius:0 0 12px 12px;
+                           padding:32px 28px;text-align:center;">
+                  <p style="margin:0;font-size:14px;color:{{ muted }};">
+                    No repositories are being tracked yet — add some on the Reports page.
+                  </p>
+                </td>
+              </tr>
+            {% endif %}
+
+            <!-- ── Open issues by repo (bar chart) ────────────────────── -->
+            {% if ok_repos | length > 1 and total_issues > 0 %}
+              {%- set issue_scale = [ok_repos | map(attribute='open_issue_count') | max, 1] | max -%}
+              <tr>
+                <td style="background:#ffffff;border-left:1px solid {{ line }};border-right:1px solid {{ line }};
+                           padding:16px 28px 22px;">
+                  <p style="margin:0 0 14px;font-size:11px;font-weight:700;letter-spacing:.08em;
+                            text-transform:uppercase;color:{{ muted }};">Open issues by repo</p>
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                    {% for repo in ok_repos | sort(attribute='open_issue_count', reverse=true) %}
+                      {%- set pct = (repo.open_issue_count * 100 // issue_scale) -%}
+                      <tr>
+                        <td width="42%" valign="middle"
+                            style="padding:0 10px 8px 0;font-size:12px;color:{{ ink }};
+                                   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                          {{ repo.full_name }}
+                        </td>
+                        <td valign="middle" style="padding:0 8px 8px 0;">
+                          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+                                 style="background:#f0f1f4;border-radius:4px;">
+                            <tr>
+                              {% if pct > 0 %}
+                                <td width="{{ pct }}%" height="10"
+                                    style="background:{{ accent }};border-radius:4px;font-size:0;line-height:10px;">&nbsp;</td>
+                              {% endif %}
+                              {% if pct < 100 %}
+                                <td height="10" style="font-size:0;line-height:10px;">&nbsp;</td>
+                              {% endif %}
+                            </tr>
+                          </table>
+                        </td>
+                        <td width="34" align="right" valign="middle"
+                            style="padding:0 0 8px;font-size:12px;font-weight:700;color:{{ ink }};">
+                          {{ repo.open_issue_count }}
+                        </td>
+                      </tr>
+                    {% endfor %}
+                  </table>
+                </td>
+              </tr>
+            {% endif %}
+
+            <!-- ── Per-repo detail ────────────────────────────────────── -->
+            {% for repo in repos %}
+              <tr>
+                <td style="background:#ffffff;border-left:1px solid {{ line }};border-right:1px solid {{ line }};
+                           border-top:1px solid {{ line }};padding:22px 28px;
+                           {% if loop.last %}border-bottom:1px solid {{ line }};border-radius:0 0 12px 12px;{% endif %}">
+
+                  <a href="{{ repo.html_url }}"
+                     style="font-size:16px;font-weight:600;color:{{ ink }};text-decoration:none;">
+                    {{ repo.full_name }}
+                  </a>
+
+                  {% if repo.error %}
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+                           style="margin-top:10px;background:#fef3f2;border:1px solid #fecdc9;border-radius:8px;">
+                      <tr>
+                        <td style="padding:10px 12px;font-size:13px;color:{{ pr_closed }};">
+                          {{ repo.error }}
+                        </td>
+                      </tr>
+                    </table>
+                  {% else %}
+                    {%- set prs = repo.pr_counts -%}
+                    {%- set pr_total = prs.open + prs.merged + prs.closed -%}
+
+                    <p style="margin:6px 0 0;font-size:13px;color:{{ muted }};">
+                      <strong style="color:{{ ink }};">{{ repo.open_issue_count }}</strong>
+                      open issue{{ '' if repo.open_issue_count == 1 else 's' }}
+                      &nbsp;·&nbsp;
+                      <strong style="color:{{ ink }};">{{ pr_total }}</strong>
+                      pull request{{ '' if pr_total == 1 else 's' }}
+                    </p>
+
+                    <!-- PR mix: stacked bar + legend -->
+                    {% if pr_total > 0 %}
+                      {#- floor each share, then hand the rounding leftover to a segment that
+                          actually has PRs, so an empty state never gets a stray sliver -#}
+                      {%- set o = prs.open * 100 // pr_total -%}
+                      {%- set m = prs.merged * 100 // pr_total -%}
+                      {%- set c = prs.closed * 100 // pr_total -%}
+                      {%- set left = 100 - o - m - c -%}
+                      {%- set open_pct = o + (left if prs.merged == 0 and prs.open > 0 else 0) -%}
+                      {%- set merged_pct = m + (left if prs.merged > 0 else 0) -%}
+                      {%- set closed_pct = c + (left if prs.merged == 0 and prs.open == 0 else 0) -%}
+                      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+                             style="margin-top:12px;border-radius:5px;">
+                        <tr>
+                          {% if open_pct > 0 %}
+                            <td width="{{ open_pct }}%" height="8" style="background:{{ pr_open }};font-size:0;line-height:8px;">&nbsp;</td>
+                          {% endif %}
+                          {% if merged_pct > 0 %}
+                            <td width="{{ merged_pct }}%" height="8" style="background:{{ pr_merged }};font-size:0;line-height:8px;">&nbsp;</td>
+                          {% endif %}
+                          {% if closed_pct > 0 %}
+                            <td width="{{ closed_pct }}%" height="8" style="background:{{ pr_closed }};font-size:0;line-height:8px;">&nbsp;</td>
+                          {% endif %}
+                        </tr>
+                      </table>
+                      <p style="margin:8px 0 0;font-size:12px;color:{{ muted }};">
+                        <span style="color:{{ pr_open }};">●</span> {{ prs.open }} open
+                        &nbsp;&nbsp;<span style="color:{{ pr_merged }};">●</span> {{ prs.merged }} merged
+                        &nbsp;&nbsp;<span style="color:{{ pr_closed }};">●</span> {{ prs.closed }} closed
+                      </p>
+                    {% endif %}
+
+                    {% if repo.groups %}
+                      {%- set group_scale = [repo.groups | map(attribute='count') | max, 1] | max -%}
+                      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+                             style="margin-top:18px;">
+                        {% for group in repo.groups %}
+                          {%- set name = group.assignee or 'Unassigned' -%}
+                          {%- set color = accent if group.assignee else '#9aa1ac' -%}
+                          {%- set pct = (group.count * 100 // group_scale) -%}
+                          <tr>
+                            <td style="padding:0 0 6px;">
+                              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                                <tr>
+                                  <td valign="middle" style="font-size:13px;font-weight:600;color:{{ ink }};">
+                                    <span style="color:{{ color }};">■</span>&nbsp;
+                                    {% if group.assignee %}
+                                      <a href="https://github.com/{{ group.assignee }}"
+                                         style="color:{{ ink }};text-decoration:none;">{{ name }}</a>
+                                    {% else %}
+                                      <span style="color:{{ muted }};">{{ name }}</span>
+                                    {% endif %}
+                                  </td>
+                                  <td width="130" valign="middle" style="padding-left:12px;">
+                                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+                                           style="background:#f0f1f4;border-radius:3px;">
+                                      <tr>
+                                        {% if pct > 0 %}
+                                          <td width="{{ pct }}%" height="6"
+                                              style="background:{{ color }};border-radius:3px;font-size:0;line-height:6px;">&nbsp;</td>
+                                        {% endif %}
+                                        {% if pct < 100 %}
+                                          <td height="6" style="font-size:0;line-height:6px;">&nbsp;</td>
+                                        {% endif %}
+                                      </tr>
+                                    </table>
+                                  </td>
+                                  <td width="28" align="right" valign="middle"
+                                      style="font-size:12px;font-weight:700;color:{{ muted }};">{{ group.count }}</td>
+                                </tr>
+                              </table>
+                            </td>
+                          </tr>
+                          <tr>
+                            <td style="padding:0 0 14px 14px;">
+                              {% for issue in group.issues[:issue_limit] %}
+                                <div style="padding:3px 0;font-size:13px;line-height:1.4;">
+                                  <span style="color:#9aa1ac;font-variant-numeric:tabular-nums;">#{{ issue.number }}</span>
+                                  <a href="{{ issue.html_url }}" style="color:#3f4451;text-decoration:none;">{{ issue.title }}</a>
+                                </div>
+                              {% endfor %}
+                              {% if group.count > issue_limit %}
+                                <div style="padding:5px 0 0;font-size:12px;">
+                                  <a href="{{ repo.html_url }}/issues?q=is%3Aissue+is%3Aopen+{{ 'assignee%3A' ~ group.assignee if group.assignee else 'no%3Aassignee' }}"
+                                     style="color:{{ accent }};text-decoration:none;font-weight:600;">
+                                    + {{ group.count - issue_limit }} more on GitHub →
+                                  </a>
+                                </div>
+                              {% endif %}
+                            </td>
+                          </tr>
+                        {% endfor %}
+                      </table>
+                    {% else %}
+                      <p style="margin:14px 0 0;font-size:13px;color:{{ pr_open }};">
+                        No open issues — inbox zero. 🎉
+                      </p>
+                    {% endif %}
+                  {% endif %}
+                </td>
+              </tr>
             {% endfor %}
 
-            {% if not repo.groups %}
-              <p style="font-size:13px;color:#71717a;margin:0;">No open issues 🎉</p>
-            {% endif %}
-          {% endif %}
-        </div>
-      {% endfor %}
-
-      <p style="color:#a1a1aa;font-size:12px;text-align:center;margin-top:24px;">
-        Sent by Informer
-      </p>
-    </div>
+            <!-- ── Footer ─────────────────────────────────────────────── -->
+            <tr>
+              <td style="padding:20px 28px 0;text-align:center;">
+                {% if failed %}
+                  <p style="margin:0 0 8px;font-size:12px;color:{{ pr_closed }};">
+                    {{ failed | length }} repo{{ '' if failed | length == 1 else 's' }} couldn't be loaded.
+                  </p>
+                {% endif %}
+                <p style="margin:0;font-size:12px;line-height:1.6;color:#9aa1ac;">
+                  Sent by <strong style="color:{{ muted }};">Informer</strong> ·
+                  {{ total_merged_prs }} PR{{ '' if total_merged_prs == 1 else 's' }} merged all-time
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
   </body>
 </html>

@@ -19,6 +19,7 @@ from app.routers import saved as saved_router
 from app.routers import settings as settings_router
 from app.routers import stream as stream_router
 from app.routers import trending as trending_router
+from app.routers import contributions as contributions_router
 from app.saved_store import set_saved_names
 from app.scheduler import start_scheduler, stop_scheduler
 
@@ -57,6 +58,7 @@ app.include_router(stream_router.router)
 app.include_router(repos_router.router)
 app.include_router(report_router.router)
 app.include_router(saved_router.router)
+app.include_router(contributions_router.router)
 
 
 @app.get("/api/health")

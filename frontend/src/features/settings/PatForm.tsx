@@ -59,6 +59,7 @@ export function PatForm() {
         <XCircle className="size-4" />
         <AlertTitle>Couldn't reach the backend</AlertTitle>
         <AlertDescription>{loadError}</AlertDescription>
+        <Button variant="outline" onClick={refresh}>Retry connection</Button>
       </Alert>
     )
   }
@@ -104,7 +105,7 @@ export function PatForm() {
             onChange={(e) => setTokenInput(e.target.value)}
             autoComplete="off"
           />
-          <Button onClick={handleSave} disabled={saving || !tokenInput.trim()}>
+          <Button onClick={handleSave} disabled={saving || validating || !tokenInput.trim()}>
             {saving && <Loader2 className="size-4 animate-spin" />}
             Save
           </Button>
@@ -119,7 +120,7 @@ export function PatForm() {
 
       {status?.configured && (
         <div>
-          <Button variant="outline" onClick={handleValidate} disabled={validating}>
+          <Button variant="outline" onClick={handleValidate} disabled={validating || saving}>
             {validating && <Loader2 className="size-4 animate-spin" />}
             Validate token
           </Button>

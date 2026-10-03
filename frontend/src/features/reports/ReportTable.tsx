@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { CircleDot, GitPullRequest, Users, Inbox, CircleAlert, CheckCircle2 } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { api, type RepoReport, type ReportResponse } from '@/lib/api'
@@ -17,7 +18,7 @@ function RepoBlock({ repo }: { repo: RepoReport }) {
         >
           {repo.full_name}
         </a>
-        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+        {!repo.error && <div className="flex items-center gap-3 text-xs text-muted-foreground">
           <span className="flex items-center gap-1">
             <CircleDot className="size-3.5" /> {repo.open_issue_count} open
           </span>
@@ -26,7 +27,7 @@ function RepoBlock({ repo }: { repo: RepoReport }) {
             {repo.pr_counts.open} open · {repo.pr_counts.merged} merged · {repo.pr_counts.closed}{' '}
             closed
           </span>
-        </div>
+        </div>}
       </div>
 
       {repo.error ? (
@@ -78,16 +79,19 @@ export function ReportTable({ reloadKey }: { reloadKey: number }) {
   const [data, setData] = useState<ReportResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
+    let active = true
     setLoading(true)
     setError(null)
     api
       .getReport()
-      .then(setData)
-      .catch((e: Error) => setError(e.message))
-      .finally(() => setLoading(false))
-  }, [reloadKey])
+      .then(result => { if (active) setData(result) })
+      .catch((e: Error) => { if (active) setError(e.message) })
+      .finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [reloadKey, attempt])
 
   if (error) {
     return (
@@ -95,6 +99,7 @@ export function ReportTable({ reloadKey }: { reloadKey: number }) {
         <CircleAlert className="size-4" />
         <AlertTitle>Couldn't build the report</AlertTitle>
         <AlertDescription>{error}</AlertDescription>
+        <Button variant="outline" onClick={() => setAttempt(n => n + 1)}>Retry report</Button>
       </Alert>
     )
   }

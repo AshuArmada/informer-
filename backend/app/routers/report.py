@@ -13,6 +13,7 @@ from app.schemas import (
     ReportConfig,
     ReportResponse,
     ReportSchedule as ReportScheduleSchema,
+    ReportScheduleUpdate,
     SendReportRequest,
     SendReportResponse,
 )
@@ -78,7 +79,7 @@ async def get_schedule(db: AsyncSession = Depends(get_db)) -> ReportScheduleSche
 
 @router.put("/schedule", response_model=ReportScheduleSchema)
 async def update_schedule(
-    body: ReportScheduleSchema, db: AsyncSession = Depends(get_db)
+    body: ReportScheduleUpdate, db: AsyncSession = Depends(get_db)
 ) -> ReportScheduleSchema:
     if body.cadence not in ("daily", "weekly"):
         raise HTTPException(status_code=400, detail="cadence must be 'daily' or 'weekly'")
