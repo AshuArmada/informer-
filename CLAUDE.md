@@ -4,8 +4,14 @@
 
 GitHub discovery supports topic, custom open-issue label, unassigned issues, license,
 minimum stars, and 7/30/90/365-day activity windows. Loaded cards group by language,
-first topic, or license. Issue filters check each 12-candidate page; total_count is
-the pre-issue-filter count. See docs/contributions.md for limits and parameters.
+first topic, or license. Issue filters automatically check up to two 12-candidate
+pages to fill sparse results; page is the last consumed candidate page and
+total_count is the pre-issue-filter count. The good-first-issue label prefilters
+repository candidates. See docs/contributions.md for limits and parameters.
+`github_search.py` caches complete search responses for 120 seconds (256 per token),
+coalesces concurrent searches, and shares GitHub's rate-limit cooldown across
+clients. Discovery exposes `retry_after` for partial results or HTTP 429 with
+`Retry-After` before results; the frontend disables retries until its countdown ends.
 
 Settings now manages AI keys/models/default provider/timeout/local Ollama URL in an
 encrypted singleton provider_settings table (migration e2c671a309bf). Runtime

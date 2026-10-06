@@ -16,10 +16,27 @@ assignment availability are verified through issue-only open-issue searches for 
 candidate, with at most three concurrent requests. The returned `total_count` is the
 candidate count **before** those issue filters. `scanned_count` records checked
 candidates and `matching_issues` on cards records matching open issues. A batch can
-have no matches even when more candidates remain. Load more checks the next batch;
-pagination stays bounded to the first 300 repository candidates. Failed checks omit
+have no matches even when more candidates remain. Filtered searches automatically
+check up to two batches (24 candidates) to find at least 12 matches, retaining all
+matches in the final batch. The good-first-issue label also narrows the initial
+repository search to projects with good first issues. Refilling stops on warnings
+or exhausted results. `page` is the last candidate page consumed; Load more resumes
+at `page + 1`, including after a failed refill. Pagination stays bounded to the
+first 300 repository candidates. Failed checks omit
 that candidate and return warnings, never fabricated counts. This uses additional
-GitHub search quota and can hit upstream rate limits.
+GitHub search quota. Successful, complete GitHub search responses are reused for
+two minutes, scoped to the configured token, with at most 256 responses cached per
+token. Concurrent searches share these results and GitHub's quota state. An
+exhausted quota stops new upstream searches until GitHub's reset time; cached
+results remain usable. Failed or incomplete responses are not cached.
+
+If issue verification reaches the quota, verified projects remain visible and the
+response includes `retry_after` in seconds. A search blocked before any candidates
+are available returns HTTP 429 with `Retry-After`. The page shows a countdown and
+disables search, refresh, and load-more requests during that cooldown. Refresh
+after it ends to retry missing checks, reusing recent successful checks. Other
+issue-check failures include their HTTP status or transport error type in warnings
+and server logs. Restarting the backend clears its cache and quota state.
 
 **Group by** organizes only loaded matches by language, first topic tag, or license.
 It does not imply a complete inventory of that category across GitHub.
@@ -134,6 +151,14 @@ Provider references: [Ollama chat API](https://docs.ollama.com/api/chat) and [Ge
 
 Repository links (including links to issues or files within a repository) open that project's analysis. Its URL is retained in `#contribute?repo=...`, so reload, browser history, and saved-project links work. Topic/language/beginner search drafts persist for the browser session when visiting Settings. Filters apply to discovery searches, not direct repository inspection.
 
-Save/unsave buttons check bookmark status and display errors on failure. Saved cards link back to contribution analysis. Repository refresh and request retries fetch new evidence. Issue filters can be cleared together. AI configuration can be retried without reloading. Stop waiting cancels the browser's wait; it does not guarantee the AI provider stops processing or billing an already submitted request.
+Bookmark icons in the top-right corner of GitHub search and Web discoveries cards,
+and beside repository details, add bookmarks to **Saved**. Click a highlighted
+bookmark icon again to remove its bookmark.
+Bookmark status stays synchronized across discovery and detail views; failed loads
+and updates show retryable errors. Saved cards link back to contribution analysis.
+Repository refresh and request retries fetch new evidence. Issue filters can be
+cleared together. AI configuration can be retried without reloading. Stop waiting
+cancels the browser's wait; it does not guarantee the AI provider stops processing
+or billing an already submitted request.
 
 Flow audit covered discovery, URL parsing, saved-project navigation, save/unsave failure recovery, provider retry/switching/cancellation, browser history, issue filtering, and report setup/tracking error recovery using mocked browser API responses. Live GitHub issue search was also checked. Full database-backed application startup requires the configured PostgreSQL service.

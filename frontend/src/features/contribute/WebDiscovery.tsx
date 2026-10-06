@@ -3,6 +3,7 @@ import { ArrowUpRight, Globe, LoaderCircle, RefreshCw, Star } from 'lucide-react
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { api, type WebDiscoveryResults } from '@/lib/api'
+import { SaveProjectButton } from './SaveProjectButton'
 
 const selectClass = 'h-10 rounded-lg border bg-background px-3 text-sm focus-visible:ring-2 focus-visible:ring-brand'
 
@@ -71,8 +72,9 @@ export function WebDiscovery({ onExplore }: { onExplore: (name: string) => void 
       </div>
       <p className="text-xs text-muted-foreground">{repos.length} matching projects in the fetched sample</p>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {repos.slice(0, limit).map(repo => <article key={repo.full_name.toLowerCase()} className="flex min-w-0 flex-col gap-4 rounded-xl border bg-card p-5">
-          <div className="flex flex-wrap gap-2">{repo.sources.map(s => <a key={s.id} href={s.url} target="_blank" rel="noreferrer" className="rounded-md bg-brand-muted px-2 py-1 text-xs text-brand hover:underline">{s.signal}{s.stale ? ' (cached)' : ''}</a>)}</div>
+        {repos.slice(0, limit).map(repo => <article key={repo.full_name.toLowerCase()} className="relative flex min-w-0 flex-col gap-4 rounded-xl border bg-card p-5">
+          <SaveProjectButton repo={repo} corner />
+          <div className="flex min-h-5 flex-wrap gap-2 pr-9">{repo.sources.map(s => <a key={s.id} href={s.url} target="_blank" rel="noreferrer" className="rounded-md bg-brand-muted px-2 py-1 text-xs text-brand hover:underline">{s.signal}{s.stale ? ' (cached)' : ''}</a>)}</div>
           <h3 className="break-words font-semibold">{repo.full_name}</h3>
           <p className="line-clamp-3 text-sm leading-6 text-muted-foreground">{repo.description || 'No description provided by the source.'}</p>
           <div className="mt-auto flex justify-between gap-3 border-t pt-4 text-xs text-muted-foreground"><span>{repo.language || 'Language unknown'}</span><span className="flex items-center gap-1"><Star className="size-3.5" /> {repo.stars === null ? 'Stars unknown' : `~${repo.stars.toLocaleString()} stars`}</span></div>

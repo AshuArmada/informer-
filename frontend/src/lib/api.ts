@@ -36,10 +36,12 @@ export interface DiscoveryOptions {
 }
 
 export interface DiscoveryResults {
+  retry_after?: number
   issue_filtered: boolean
   scanned_count: number
   warnings: string[]
   repos: ContributionRepo[]
+  // Last candidate page consumed; continue with page + 1 after automatic refill.
   page: number
   total_count: number
   has_more: boolean
@@ -213,6 +215,17 @@ export interface ReportSchedule {
   email: string | null
 }
 
+export class ApiError extends Error {
+  status: number
+  retryAfter: number
+
+  constructor(message: string, status: number, retryAfter = 0) {
+    super(message)
+    this.status = status
+    this.retryAfter = retryAfter
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const timeout = AbortSignal.timeout(path.endsWith('/advice') ? 660_000 : 90_000)
   let res: Response
@@ -232,7 +245,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const message = typeof detail === 'string' ? detail : Array.isArray(detail)
       ? detail.map((item: { msg?: string }) => item.msg || 'Invalid input').join('; ')
       : `Request failed (${res.status}). Please retry.`
-    throw new Error(message)
+    const retryAfter = Number(res.headers.get('Retry-After'))
+    throw new ApiError(message, res.status, Number.isFinite(retryAfter) ? Math.max(0, retryAfter) : 0)
   }
   return res.json() as Promise<T>
 }

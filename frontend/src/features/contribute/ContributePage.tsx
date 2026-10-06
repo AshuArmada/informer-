@@ -2,13 +2,15 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { ArrowLeft, ArrowUpRight, BookOpen, CircleDot, Compass, GitPullRequest, LoaderCircle, Search, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { api, type AIProvider, type DiscoveryOptions, type ContributionConfig, type ContributionAdvice, type ContributionAnalysis, type ContributionRepo } from '@/lib/api'
+import { api, ApiError, type AIProvider, type DiscoveryOptions, type ContributionConfig, type ContributionAdvice, type ContributionAnalysis, type ContributionRepo } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { contributionLink, repositoryName } from './navigation'
 import { RepositoryFilters } from './RepositoryFilters'
 import { defaultFilters, type RepositoryFiltersValue } from './filters'
 import { RepositoryGroups } from './RepositoryGroups'
 import { WebDiscovery } from './WebDiscovery'
+import { SaveProjectButton } from './SaveProjectButton'
+import { SavedProjectsContext, useSavedProjects } from './useSavedProjects'
 
 function initialSearch() {
   const fallback = { query: '', language: '', beginner: true, filters: { ...defaultFilters }, collection: 'active' as 'active' | 'new', sort: 'updated' as 'updated' | 'stars' }
@@ -33,6 +35,11 @@ function Tag({ children, active = false }: { children: React.ReactNode; active?:
 }
 
 export function ContributePage() {
+  const projects = useSavedProjects()
+  return <SavedProjectsContext.Provider value={projects}><ContributeContent /></SavedProjectsContext.Provider>
+}
+
+function ContributeContent() {
   const [discoveryMode, setDiscoveryMode] = useState<'github' | 'web'>('github')
   const discoveryModeRef = useRef<'github' | 'web'>('github')
   const [draft] = useState(initialSearch)
@@ -60,6 +67,24 @@ export function ContributePage() {
   const controller = useRef<AbortController | null>(null)
   const [resultDescription, setResultDescription] = useState('')
   const retry = useRef<(() => void) | null>(null)
+  const [retryAt, setRetryAt] = useState(0)
+  const retryAtRef = useRef(0)
+  const [now, setNow] = useState(Date.now)
+  const cooldown = Math.max(0, Math.ceil((retryAt - now) / 1000))
+
+  useEffect(() => {
+    if (!cooldown) return
+    const timer = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [cooldown])
+
+  function startCooldown(seconds: number) {
+    if (seconds <= 0) return
+    const current = Date.now()
+    setNow(current)
+    retryAtRef.current = Math.max(retryAtRef.current, current + seconds * 1000)
+    setRetryAt(retryAtRef.current)
+  }
 
   useEffect(() => {
     const readRoute = () => {
@@ -138,6 +163,7 @@ export function ContributePage() {
   }
 
   async function discover(options: DiscoveryOptions, nextPage = 1) {
+    if (Date.now() < retryAtRef.current) return
     retry.current = () => { void discover(options, nextPage) }
     controller.current?.abort()
     const request = new AbortController()
@@ -151,6 +177,7 @@ export function ContributePage() {
     try {
       const result = await api.searchContributions(options, nextPage, request.signal)
       if (!request.signal.aborted) {
+        startCooldown(result.retry_after ?? 0)
         setRepos(previous => nextPage === 1 ? result.repos : [...previous, ...result.repos.filter(r => !previous.some(p => p.full_name === r.full_name))])
         setSearched(true); hasResults.current = true
         setApplied(options); setPage(result.page); setHasMore(result.has_more)
@@ -159,7 +186,12 @@ export function ContributePage() {
         setSearchWarnings(previous => nextPage === 1 ? result.warnings : [...previous, ...result.warnings])
         setResultDescription([options.q.trim() || 'All text', options.language || 'All languages', options.topic && `#${options.topic}`, options.issue_label && `Label: ${options.issue_label}`, options.unassigned && 'Unassigned issues', options.license && options.license.toUpperCase(), options.min_stars && `${options.min_stars}+ stars`, options.collection === 'new' && 'Created in last 90 days', options.beginner && 'Good first issues'].filter(Boolean).join(' / '))
       }
-    } catch (e) { if (!request.signal.aborted) setError(errorMessage(e)) }
+    } catch (e) {
+      if (!request.signal.aborted) {
+        setError(errorMessage(e))
+        if (e instanceof ApiError) startCooldown(e.retryAfter)
+      }
+    }
     finally { if (!request.signal.aborted) { setLoading(false); setLoadingMore(false) } }
   }
 
@@ -173,13 +205,13 @@ export function ContributePage() {
         <Button variant={discoveryMode === 'web' ? 'default' : 'outline'} aria-pressed={discoveryMode === 'web'} onClick={() => { cancel(); setError(null); discoveryModeRef.current = 'web'; setDiscoveryMode('web'); window.location.hash = 'contribute' }}>Web discoveries</Button>
       </div>
       {discoveryMode === 'github' && <form onSubmit={search} className="mt-7 space-y-4">
-        <div className="flex flex-wrap items-center gap-2 text-xs"><span className="mr-1 text-muted-foreground">Start with</span>{[{ name: 'First contributions', label: 'good first issue' }, { name: 'Help wanted', label: 'help wanted' }, { name: 'Fix a bug', label: 'bug' }, { name: 'Write documentation', label: 'documentation' }].map(preset => <button key={preset.label} type="button" disabled={loading} className="rounded-full border bg-background px-3 py-1.5 text-muted-foreground transition-colors hover:border-brand hover:text-brand focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-50" onClick={() => quickSearch(preset.label)}>{preset.name}</button>)}</div>
+        <div className="flex flex-wrap items-center gap-2 text-xs"><span className="mr-1 text-muted-foreground">Start with</span>{[{ name: 'First contributions', label: 'good first issue' }, { name: 'Help wanted', label: 'help wanted' }, { name: 'Fix a bug', label: 'bug' }, { name: 'Write documentation', label: 'documentation' }].map(preset => <button key={preset.label} type="button" disabled={loading || cooldown > 0} className="rounded-full border bg-background px-3 py-1.5 text-muted-foreground transition-colors hover:border-brand hover:text-brand focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-50" onClick={() => quickSearch(preset.label)}>{preset.name}</button>)}</div>
         <div className="flex flex-col gap-3 sm:flex-row">
           <div className="relative flex-1"><Search className="absolute left-3 top-3 size-4 text-muted-foreground" /><Input aria-label="Topic or repository" className="h-10 bg-background pl-9" value={query} onChange={e => setQuery(e.target.value)} maxLength={200} placeholder="Search a topic, or paste owner/repository" /></div>
           <select aria-label="Programming language" className={cn(fieldClass, 'sm:w-44')} value={language} onChange={e => setLanguage(e.target.value)}>
             <option value="">All languages</option>{['TypeScript', 'JavaScript', 'Python', 'Go', 'Rust', 'Java', 'C++', 'C#', 'Ruby', 'Swift', 'Kotlin', 'PHP'].map(l => <option key={l}>{l}</option>)}
           </select>
-          <Button type="submit" disabled={loading || !!loadingRepo} className="h-10 bg-brand px-5 text-brand-foreground hover:bg-brand/90">{loading ? <LoaderCircle className="animate-spin" /> : <Search />} Find projects</Button>
+          <Button type="submit" disabled={loading || !!loadingRepo || cooldown > 0} className="h-10 bg-brand px-5 text-brand-foreground hover:bg-brand/90">{loading ? <LoaderCircle className="animate-spin" /> : <Search />} Find projects</Button>
         </div>
         <div className="flex flex-wrap gap-3">
           <label className="text-xs text-muted-foreground">Project collection<select aria-label="Project collection" className={cn(fieldClass, 'mt-1 sm:w-52')} value={collection} onChange={e => setCollection(e.target.value as 'active' | 'new')}><option value="active">Active projects</option><option value="new">New projects (last 90 days)</option></select></label>
@@ -191,20 +223,21 @@ export function ContributePage() {
       </form>}
     </section>
 
-    {error && <div role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm">{error} <Button variant="outline" onClick={() => { if (retry.current) retry.current(); else void search() }}>Retry request</Button> {/token|permission|settings/i.test(error) && <a href="#settings" className="font-medium text-brand underline">Open Settings</a>}</div>}
+    {cooldown > 0 && <p role="status" className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 text-sm">GitHub search is cooling down. Retry in {cooldown} seconds. Recent results are cached to reduce requests.</p>}
+    {error && <div role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm">{error} <Button variant="outline" disabled={cooldown > 0} onClick={() => { if (retry.current) retry.current(); else void search() }}>Retry request</Button> {/token|permission|settings/i.test(error) && <a href="#settings" className="font-medium text-brand underline">Open Settings</a>}</div>}
     {(loading || loadingMore || loadingRepo) && <Button variant="outline" onClick={cancel}>Cancel request</Button>}
     {(loading || loadingRepo) && <div role="status" className="flex items-center gap-3 rounded-xl border p-8 text-sm text-muted-foreground"><LoaderCircle className="size-5 animate-spin text-brand" />{loadingRepo ? `Reading activity, guidelines, and issues for ${loadingRepo}…` : 'Finding recently active public projects…'}</div>}
 
     {analysis && !loadingRepo ? <RepositoryDetail key={analysis.repo.full_name} analysis={analysis} onBack={() => { window.location.hash = 'contribute' }} onRefresh={() => inspect(analysis.repo.full_name)} /> : !loading && !loadingRepo && <>
       {discoveryMode === 'web' ? <WebDiscovery onExplore={openRepo} /> : searched ? <section className="space-y-4">
-        <div className="flex justify-end">{applied && <Button variant="outline" disabled={loadingMore} onClick={() => discover(applied)}>Refresh projects</Button>}</div>
+        <div className="flex justify-end">{applied && <Button variant="outline" disabled={loadingMore || cooldown > 0} onClick={() => discover(applied)}>Refresh projects</Button>}</div>
         <p className="text-xs text-muted-foreground">Results for {resultDescription}. Change filters and select Find projects to search again.</p>
         <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-lg font-semibold">Explore opportunities <span className="ml-2 text-sm font-normal text-muted-foreground">{repos.length} projects</span></h2><span className="text-xs text-muted-foreground">Pushed in the last {applied?.activity_days || 90} days</span></div>
-        <p role="status" className="text-xs leading-5 text-muted-foreground">{applied?.issue_label || applied?.unassigned ? `${scanned} candidate projects checked out of ${total.toLocaleString()} repository matches. Issue filters apply to each batch; load more to check the next projects.` : `${total.toLocaleString()} matching repositories. Showing ${repos.length} loaded projects.`}</p>
-        {searchWarnings.length > 0 && <div role="status" className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 text-sm"><p>Some issue checks were unavailable. Refresh this search to retry.</p><details className="mt-2"><summary className="cursor-pointer text-xs">View details ({searchWarnings.length})</summary>{searchWarnings.map((warning, i) => <p className="mt-1 text-xs" key={i}>{warning}</p>)}</details></div>}
+        <p role="status" className="text-xs leading-5 text-muted-foreground">{applied?.issue_label || applied?.unassigned ? `${repos.length} matching projects found after checking ${scanned} candidates out of ${total.toLocaleString()} repository matches. ${hasMore ? 'More candidates are available. Load more to continue searching.' : 'Search complete within the browsing limit.'}` : `${total.toLocaleString()} matching repositories. Showing ${repos.length} loaded projects.`}</p>
+        {searchWarnings.length > 0 && <div role="status" className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 text-sm"><p>Some search results could not be verified or loaded. Refresh to retry issue checks after any cooldown.</p><details className="mt-2"><summary className="cursor-pointer text-xs">View details ({searchWarnings.length})</summary>{searchWarnings.map((warning, i) => <p className="mt-1 text-xs" key={i}>{warning}</p>)}</details></div>}
         {repos.length === 0 ? <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground"><p>No projects match in this batch. {hasMore ? 'Load the next batch or broaden your filters.' : 'Try a broader topic or turn off the good first issue filter.'}</p><Button variant="outline" className="mt-4" onClick={() => quickSearch('')}>Clear filters and explore</Button></div> : <RepositoryGroups repos={repos} beginner={applied?.beginner ?? false} onExplore={openRepo} onTopic={topic => quickSearch('', topic)} />}
         {incomplete && <p role="status" className="text-xs text-muted-foreground">GitHub returned partial search results. Retry the search or narrow your filters.</p>}
-        {hasMore && applied && <div className="flex justify-center"><Button variant="outline" className="h-10" disabled={loadingMore} onClick={() => discover(applied, page + 1)}>{loadingMore ? <LoaderCircle className="animate-spin" /> : null}{loadingMore ? 'Loading projects...' : 'Load more projects'}</Button></div>}
+        {hasMore && applied && <div className="flex justify-center"><Button variant="outline" className="h-10" disabled={loadingMore || cooldown > 0} onClick={() => discover(applied, page + 1)}>{loadingMore ? <LoaderCircle className="animate-spin" /> : null}{loadingMore ? 'Loading projects...' : 'Load more projects'}</Button></div>}
         {!hasMore && total > 300 && <p className="text-center text-xs text-muted-foreground">Browsing is limited to the first 300 matches. Narrow your topic or language to explore more.</p>}
       </section> : <section className="grid gap-5 sm:grid-cols-3">
         {[{ icon: Compass, title: 'Find your fit', text: 'Search by topic and language, with an optional good first issue filter.' }, { icon: GitPullRequest, title: 'Understand the project', text: 'See recent activity, sampled merge rates, and time to merge before you start.' }, { icon: BookOpen, title: 'Contribute with context', text: 'Read the rules, explore issue labels, and get a personalized starting plan.' }].map(({ icon: Icon, title, text }) => <div key={title} className="rounded-xl border p-6"><Icon className="mb-4 size-5 text-brand" /><h2 className="text-sm font-semibold">{title}</h2><p className="mt-2 text-sm leading-6 text-muted-foreground">{text}</p></div>)}
@@ -217,35 +250,16 @@ function RepositoryDetail({ analysis: a, onBack, onRefresh }: { analysis: Contri
   const [label, setLabel] = useState('')
   const [issueQuery, setIssueQuery] = useState('')
   const [unassigned, setUnassigned] = useState(false)
-  const [saved, setSaved] = useState<boolean | null>(null)
-  const [saving, setSaving] = useState(false)
-  const [saveError, setSaveError] = useState<string | null>(null)
   const issues = a.issues.filter(i => (!label || i.labels.includes(label)) && (!unassigned || i.assignees.length === 0) && `${i.title} ${i.number}`.toLowerCase().includes(issueQuery.trim().replace(/^#/, '').toLowerCase()))
   const metrics = a.acceptance
-
-  useEffect(() => {
-    let active = true
-    api.getSaved().then(repos => { if (active) setSaved(repos.some(r => r.repo_full_name.toLowerCase() === a.repo.full_name.toLowerCase())) }).catch(() => { if (active) setSaved(false) })
-    return () => { active = false }
-  }, [a.repo.full_name])
-
-  async function save() {
-    setSaving(true); setSaveError(null)
-    try {
-      if (saved) await api.unsaveRepo(a.repo.full_name)
-      else await api.saveRepo({ repo_full_name: a.repo.full_name, description: a.repo.description, language: a.repo.language, html_url: a.repo.html_url, stars: a.repo.stars })
-      setSaved(!saved)
-    } catch (e) { setSaveError(errorMessage(e)) } finally { setSaving(false) }
-  }
 
   return <section className="space-y-6">
     <Button variant="ghost" onClick={onBack}><ArrowLeft /> Back to discovery</Button>
     <Button variant="outline" onClick={onRefresh}>Refresh repository</Button>
     <div className="flex flex-wrap items-start justify-between gap-4">
       <div className="min-w-0 flex-1"><div className="mb-2 flex flex-wrap gap-2"><Tag active>{a.state}</Tag>{a.repo.language && <Tag>{a.repo.language}</Tag>}<Tag>{a.repo.license || 'License not detected'}</Tag></div><h2 className="break-words text-2xl font-semibold tracking-tight">{a.repo.full_name}</h2><p className="mt-2 max-w-2xl text-sm text-muted-foreground">{a.repo.description}</p><p className="mt-2 text-xs text-muted-foreground">Checked {new Date(a.fetched_at).toLocaleString()} · Last push {date(a.repo.pushed_at)}</p></div>
-      <div className="flex gap-2"><Button variant="outline" disabled={saved === null || saving} onClick={save}>{saving ? 'Updating…' : saved === null ? 'Checking saved…' : saved ? 'Unsave project' : 'Save project'}</Button><Button variant="outline" asChild><a href={a.repo.html_url} target="_blank" rel="noreferrer">GitHub <ArrowUpRight /></a></Button></div>
+      <div className="flex flex-wrap items-start gap-2"><SaveProjectButton repo={a.repo} /><Button variant="outline" asChild><a href={a.repo.html_url} target="_blank" rel="noreferrer">GitHub <ArrowUpRight /></a></Button></div>
     </div>
-    {saveError && <p role="alert" className="text-sm text-destructive">{saveError}</p>}
     {a.warnings.length > 0 && <div role="status" className="space-y-1 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 text-sm">{a.warnings.map(w => <p key={w}>{w}</p>)}</div>}
 
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

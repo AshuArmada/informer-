@@ -14,8 +14,12 @@ Configure the GitHub PAT in **Settings** for repository search and analysis. Web
 **Repository filters:** refine GitHub discovery by topic tag, custom open-issue label,
 unassigned issues, language, license, minimum stars, and recent activity. Use quick
 starts for beginner issues, help wanted, bugs, or documentation. Group loaded
-projects by language, first topic tag, or license. Issue checks run against each
-12-project batch; counts distinguish candidate repositories from verified matches.
+projects by language, first topic tag, or license. Filtered searches automatically
+check up to two 12-project batches to fill sparse results; counts distinguish
+candidate repositories from verified matches. First contributions targets projects
+with good first issues before verifying their labels.
+Recent search results are cached for two minutes. If GitHub's search quota is
+exhausted, a countdown shows when to retry while verified projects stay visible.
 
 **API connections:** Settings now manages OpenAI/Gemini keys, all three AI models,
 the default provider, timeout, and local Ollama address. Save, replace, remove, and

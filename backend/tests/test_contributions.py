@@ -207,7 +207,8 @@ def test_custom_issue_filters_check_live_open_issues_and_preserve_candidate_pagi
     assert queries == ['repo:org/project is:issue is:open label:"help wanted" no:assignee']
     assert response["repos"][0]["matching_issues"] == 3
     assert response["issue_filtered"] is True
-    assert response["scanned_count"] == 1
+    assert response["scanned_count"] == 2
+    assert response["page"] == 2
     assert response["total_count"] == 26 and response["has_more"] is True
 
 
@@ -217,7 +218,107 @@ def test_failed_issue_checks_are_not_fabricated_as_matches(api_client):
     result = client.get("/api/contributions/search", params={"issue_label": "bug"}).json()
     assert result["repos"] == [] and result["has_more"] is True
     assert "Could not check issues" in result["warnings"][0]
+    assert result["page"] == 1
     assert client.get('/api/contributions/search', params={"issue_label": 'bug" is:closed'}).status_code == 422
+
+
+def paged_discovery(github, matching, total=60, fail_page=None):
+    async def get_json(path, params=None):
+        github.calls.append((path, params))
+        if path == "/search/repositories":
+            page = params["page"]
+            if page == fail_page:
+                raise httpx.ReadTimeout("unavailable")
+            start = (page - 1) * params["per_page"]
+            return {"items": [{"full_name": f"org/project-{i}", "html_url": f"https://github.com/org/project-{i}"}
+                              for i in range(start, min(start + params["per_page"], total))],
+                    "total_count": total, "incomplete_results": page == 1}
+        assert path == "/search/issues"
+        index = int(params["q"].split()[0].rsplit("-", 1)[1])
+        return {"total_count": 1 if index in matching else 0}
+    github.get_json = get_json
+
+
+def test_sparse_filtered_results_refill_and_continue_without_losing_matches(api_client):
+    client, github = api_client
+    paged_discovery(github, {0, *range(12, 36)})
+    first = client.get("/api/contributions/search", params={"issue_label": "bug"}).json()
+    assert len(first["repos"]) == 13  # Preserve every match from the final batch.
+    assert first["page"] == 2 and first["scanned_count"] == 24
+    assert first["has_more"] and first["incomplete_results"]
+    second = client.get("/api/contributions/search", params={"issue_label": "bug", "page": first["page"] + 1}).json()
+    assert second["page"] == 3 and second["scanned_count"] == 12
+    names = [r["full_name"] for r in first["repos"] + second["repos"]]
+    assert len(names) == len(set(names)) == 25
+    assert {f"org/project-{i}" for i in (0, *range(12, 36))} == set(names)
+
+
+def test_good_first_issue_label_prefilters_candidates(api_client):
+    client, github = api_client
+    paged_discovery(github, set(range(12)))
+    result = client.get("/api/contributions/search", params={"issue_label": " good first issue ", "beginner": False}).json()
+    assert "good-first-issues:>0" in result["query"]
+    assert len(result["repos"]) == 12 and result["page"] == 1
+    assert all('label:"good first issue"' in p["q"] for path, p in github.calls if path == "/search/issues")
+
+
+def test_empty_filtered_batches_stop_at_request_budget_and_remain_pageable(api_client):
+    client, github = api_client
+    paged_discovery(github, set())
+    result = client.get("/api/contributions/search", params={"unassigned": True}).json()
+    assert result["repos"] == [] and result["has_more"]
+    assert result["page"] == 2 and result["scanned_count"] == 24
+    assert len(github.calls) == 26
+
+
+@pytest.mark.parametrize("total,start,expected_page,scanned", [(15, 1, 2, 15), (600, 25, 25, 12), (0, 1, 1, 0)])
+def test_filtered_search_stops_at_exhaustion_and_browsing_limit(api_client, total, start, expected_page, scanned):
+    client, github = api_client
+    paged_discovery(github, set(), total=total)
+    result = client.get("/api/contributions/search", params={"issue_label": "bug", "page": start}).json()
+    assert not result["has_more"]
+    assert result["page"] == expected_page and result["scanned_count"] == scanned
+
+
+def test_refill_failure_preserves_results_and_retry_cursor(api_client):
+    client, github = api_client
+    paged_discovery(github, {0}, fail_page=2)
+    result = client.get("/api/contributions/search", params={"issue_label": "bug"}).json()
+    assert len(result["repos"]) == 1
+    assert result["page"] == 1 and result["has_more"]
+    assert result["scanned_count"] == 12
+    assert "Load more to retry" in result["warnings"][0]
+
+
+def test_partial_rate_limit_keeps_verified_matches_and_exposes_cooldown(api_client):
+    client, github = api_client
+    paged_discovery(github, set(range(12)))
+    original = github.get_json
+    async def limited(path, params=None):
+        if path == "/search/issues" and "project-0 " not in params["q"]:
+            raise routes.GitHubRateLimited(25)
+        return await original(path, params)
+    github.get_json = limited
+    result = client.get("/api/contributions/search", params={"issue_label": "bug"}).json()
+    assert [r["full_name"] for r in result["repos"]] == ["org/project-0"]
+    assert result["retry_after"] == 25
+    assert len(result["warnings"]) == 1 and "quota reached" in result["warnings"][0]
+    assert result["page"] == 1 and result["has_more"]
+
+
+@pytest.mark.asyncio
+async def test_rate_limit_dependency_returns_retry_header(monkeypatch):
+    class Client:
+        async def __aenter__(self): return self
+        async def __aexit__(self, *args): pass
+    async def get_client(db): return Client()
+    monkeypatch.setattr(routes, "get_github_client", get_client)
+    dependency = routes.client_dependency(db=None)
+    await anext(dependency)
+    with pytest.raises(routes.HTTPException) as error:
+        await dependency.athrow(routes.GitHubRateLimited(25))
+    assert error.value.status_code == 429
+    assert error.value.headers == {"Retry-After": "25"}
 
 
 def test_ai_setup_is_explicit(api_client, monkeypatch):

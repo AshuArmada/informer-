@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import asyncio
 import re
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, Literal
 
@@ -17,9 +18,14 @@ from app.provider_settings import effective_settings
 from app.contributions import analyze_repository, repo_summary
 from app.db import get_db
 from app.github import GitHubTokenNotConfigured, get_github_client
+from app.github_search import GitHubRateLimited
 from app.web_discovery import web_discovery
 
 router = APIRouter(prefix="/api/contributions", tags=["contributions"])
+logger = logging.getLogger("informer.contributions")
+SEARCH_PAGE_SIZE = 12
+# Bound issue-search requests while allowing sparse batches to refill themselves.
+MAX_FILTERED_BATCHES = 2
 Owner = Annotated[str, Path(pattern=r"^[A-Za-z0-9][A-Za-z0-9-]{0,38}$")]
 Repo = Annotated[str, Path(pattern=r"^[A-Za-z0-9_.-]{1,100}$")]
 
@@ -32,6 +38,8 @@ async def client_dependency(db: AsyncSession = Depends(get_db)):
     try:
         async with client:
             yield client
+    except GitHubRateLimited as exc:
+        raise HTTPException(429, str(exc), headers={"Retry-After": str(exc.retry_after)}) from None
     except httpx.HTTPStatusError as exc:
         status = exc.response.status_code
         if status == 404:
@@ -89,7 +97,7 @@ async def search(
         query += f" created:>={created}"
     if language:
         query += f' language:"{language}"'
-    if beginner:
+    if beginner or issue_label.strip().casefold() == "good first issue":
         query += " good-first-issues:>0"
     if topic:
         query += f" topic:{topic}"
@@ -97,37 +105,82 @@ async def search(
         query += f" license:{license}"
     if min_stars:
         query += f" stars:>={min_stars}"
-    result = await client.get_json("/search/repositories", {"q": query, "sort": sort, "order": "desc", "per_page": 12, "page": page})
-    repos = result.get("items", [])
-    total = result.get("total_count", 0)
-    summaries = [repo_summary(r) for r in repos if not r.get("private") and not r.get("archived") and not r.get("disabled")]
     issue_filtered = bool(issue_label.strip() or unassigned)
     warnings = []
-    if issue_filtered:
-        semaphore = asyncio.Semaphore(3)
+    retry_after = 0
+    semaphore = asyncio.Semaphore(3)
 
-        async def matches(repo):
-            issue_query = f"repo:{repo['full_name']} is:issue is:open"
-            if issue_label.strip():
-                issue_query += f' label:"{issue_label.strip()}"'
-            if unassigned:
-                issue_query += " no:assignee"
-            async with semaphore:
-                try:
-                    found = await client.get_json("/search/issues", {"q": issue_query, "per_page": 1})
-                except httpx.HTTPError:
-                    warnings.append(f"Could not check issues for {repo['full_name']}; omitted from these results.")
-                    return None
-            if found.get("incomplete_results"):
-                warnings.append(f"Issue search for {repo['full_name']} was incomplete.")
-            if found.get("total_count", 0) > 0:
-                return {**repo, "matching_issues": found["total_count"]}
-            return None
+    async def matches(repo):
+        nonlocal retry_after
+        issue_query = f"repo:{repo['full_name']} is:issue is:open"
+        if issue_label.strip():
+            issue_query += f' label:"{issue_label.strip()}"'
+        if unassigned:
+            issue_query += " no:assignee"
+        async with semaphore:
+            try:
+                found = await client.get_json("/search/issues", {"q": issue_query, "per_page": 1})
+            except GitHubRateLimited as exc:
+                retry_after = max(retry_after, exc.retry_after)
+                return None
+            except httpx.HTTPError as exc:
+                reason = f"GitHub HTTP {exc.response.status_code}" if isinstance(exc, httpx.HTTPStatusError) else type(exc).__name__
+                logger.warning("Issue check failed: repo=%s reason=%s", repo['full_name'], reason)
+                warnings.append(f"Could not check issues for {repo['full_name']} ({reason}); omitted from these results.")
+                return None
+        if found.get("incomplete_results"):
+            warnings.append(f"Issue search for {repo['full_name']} was incomplete.")
+        if found.get("total_count", 0) > 0:
+            return {**repo, "matching_issues": found["total_count"]}
+        return None
 
-        summaries = [r for r in await asyncio.gather(*(matches(r) for r in summaries)) if r]
-    return {"repos": summaries, "issue_filtered": issue_filtered, "scanned_count": len(repos), "warnings": warnings,
-            "query": query, "page": page, "total_count": total,
-            "has_more": page * 12 < min(total, 300), "incomplete_results": result.get("incomplete_results", False),
+    summaries = []
+    seen = set()
+    scanned = 0
+    incomplete = False
+    last_page = page
+    for current_page in range(page, min(page + (MAX_FILTERED_BATCHES if issue_filtered else 1), 26)):
+        try:
+            result = await client.get_json("/search/repositories", {
+                "q": query, "sort": sort, "order": "desc", "per_page": SEARCH_PAGE_SIZE, "page": current_page,
+            })
+        except GitHubRateLimited as exc:
+            if current_page == page:
+                raise
+            retry_after = max(retry_after, exc.retry_after)
+            break
+        except httpx.HTTPError:
+            if current_page == page:
+                raise
+            warnings.append("Could not load more candidates; showing checked projects. Load more to retry.")
+            break
+        repos = result.get("items", [])
+        total = result.get("total_count", 0)
+        scanned += len(repos)
+        incomplete = incomplete or result.get("incomplete_results", False)
+        last_page = current_page
+        batch = []
+        for repo in repos:
+            if repo.get("private") or repo.get("archived") or repo.get("disabled"):
+                continue
+            name = repo["full_name"].casefold()
+            if name not in seen:
+                seen.add(name)
+                batch.append(repo_summary(repo))
+        if issue_filtered:
+            batch = [r for r in await asyncio.gather(*(matches(r) for r in batch)) if r]
+        # Keep the entire final batch so pagination never drops verified matches.
+        summaries.extend(batch)
+        has_more = bool(repos) and current_page * SEARCH_PAGE_SIZE < min(total, 300)
+        if len(summaries) >= SEARCH_PAGE_SIZE or not has_more or warnings or retry_after:
+            break
+
+    if retry_after:
+        warnings.append("GitHub search quota reached. Some projects could not be checked. Refresh after the cooldown to retry; recent successful checks are reused.")
+    return {"repos": summaries, "issue_filtered": issue_filtered, "scanned_count": scanned, "warnings": warnings,
+            "retry_after": retry_after,
+            "query": query, "page": last_page, "total_count": total,
+            "has_more": has_more, "incomplete_results": incomplete,
             "beginner": beginner, "collection": collection, "sort": sort}
 
 

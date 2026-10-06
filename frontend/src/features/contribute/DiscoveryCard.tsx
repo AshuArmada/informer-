@@ -2,13 +2,15 @@ import { ArrowUpRight, CircleDot, Star } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { ContributionRepo } from '@/lib/api'
 import { languageColor } from '@/lib/languageColors'
+import { SaveProjectButton } from './SaveProjectButton'
 
 const date = (value: string | null) => value ? new Date(value).toLocaleDateString() : 'Unknown'
 
 export function DiscoveryCard({ repo, beginner, onExplore, onTopic }: { repo: ContributionRepo; beginner: boolean; onExplore: () => void; onTopic?: (topic: string) => void }) {
   const recentlyActive = repo.pushed_at && Date.now() - new Date(repo.pushed_at).getTime() <= 30 * 86400000
-  return <article className="flex min-w-0 flex-col gap-4 rounded-xl border bg-card p-5 transition-colors hover:border-brand/40">
-    <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+  return <article className="relative flex min-w-0 flex-col gap-4 rounded-xl border bg-card p-5 transition-colors hover:border-brand/40">
+    <SaveProjectButton repo={repo} corner />
+    <div className="flex min-h-5 flex-wrap items-center justify-between gap-2 pr-9 text-xs">
       <span className="rounded-full bg-brand-muted px-2 py-1 text-brand">{recentlyActive ? 'Active in last 30 days' : `Last push ${date(repo.pushed_at)}`}</span>
       <span className="flex items-center gap-1 text-muted-foreground"><Star className="size-3.5" /> {repo.stars.toLocaleString()}</span>
     </div>
