@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 
 import httpx
 from sqlalchemy import select
@@ -8,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import AppSettings
 from app.security import try_decrypt_token
+from app.github_search import search_requests
 
 GITHUB_API_BASE = "https://api.github.com"
 
@@ -27,6 +29,7 @@ class GitHubClient:
     manager, or call aclose() when done."""
 
     def __init__(self, token: str) -> None:
+        self._search = search_requests(hashlib.sha256(token.encode()).hexdigest())
         self._http = httpx.AsyncClient(
             base_url=GITHUB_API_BASE,
             headers={
@@ -47,6 +50,11 @@ class GitHubClient:
         await self.aclose()
 
     async def _get(self, url: str, params: dict | None = None) -> httpx.Response:
+        if url.startswith("/search/"):
+            return await self._search.get(url, params, lambda: self._get_uncached(url, params))
+        return await self._get_uncached(url, params)
+
+    async def _get_uncached(self, url: str, params: dict | None = None) -> httpx.Response:
         """GET with raise_for_status, retrying transient transport errors (resets, timeouts)."""
         for attempt in range(_RETRIES + 1):
             try:

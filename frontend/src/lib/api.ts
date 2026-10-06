@@ -6,6 +6,7 @@ export interface SettingsStatus {
 }
 
 export interface ContributionRepo {
+  matching_issues?: number
   created_at: string | null
   open_issues_and_prs: number
   full_name: string
@@ -26,10 +27,21 @@ export interface DiscoveryOptions {
   beginner: boolean
   collection: 'active' | 'new'
   sort: 'updated' | 'stars'
+  topic?: string
+  license?: string
+  min_stars?: number
+  activity_days?: number
+  issue_label?: string
+  unassigned?: boolean
 }
 
 export interface DiscoveryResults {
+  retry_after?: number
+  issue_filtered: boolean
+  scanned_count: number
+  warnings: string[]
   repos: ContributionRepo[]
+  // Last candidate page consumed; continue with page + 1 after automatic refill.
   page: number
   total_count: number
   has_more: boolean
@@ -101,6 +113,15 @@ export interface ContributionAnalysis {
 }
 
 export type AIProvider = 'openai' | 'ollama' | 'gemini'
+export interface ProviderSettings {
+  ai_provider: AIProvider
+  openai_model: string
+  gemini_model: string
+  ollama_model: string
+  ollama_base_url: string
+  ai_timeout_seconds: number
+  providers: ContributionConfig['providers']
+}
 export interface ContributionConfig {
   ai_configured: boolean
   default_provider: AIProvider
@@ -194,13 +215,24 @@ export interface ReportSchedule {
   email: string | null
 }
 
+export class ApiError extends Error {
+  status: number
+  retryAfter: number
+
+  constructor(message: string, status: number, retryAfter = 0) {
+    super(message)
+    this.status = status
+    this.retryAfter = retryAfter
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const timeout = AbortSignal.timeout(path.endsWith('/advice') ? 660_000 : 90_000)
   let res: Response
   try {
     res = await fetch(`/api${path}`, {
-    headers: { 'Content-Type': 'application/json' },
     ...init,
+    headers: { ...init?.headers, 'Content-Type': 'application/json', 'X-Informer-Request': '1' },
     signal: init?.signal ? AbortSignal.any([init.signal, timeout]) : timeout,
     })
   } catch (error) {
@@ -213,17 +245,24 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const message = typeof detail === 'string' ? detail : Array.isArray(detail)
       ? detail.map((item: { msg?: string }) => item.msg || 'Invalid input').join('; ')
       : `Request failed (${res.status}). Please retry.`
-    throw new Error(message)
+    const retryAfter = Number(res.headers.get('Retry-After'))
+    throw new ApiError(message, res.status, Number.isFinite(retryAfter) ? Math.max(0, retryAfter) : 0)
   }
   return res.json() as Promise<T>
 }
 
 export const api = {
+  getProviderSettings: () => request<ProviderSettings>('/settings/providers'),
+  updateProviderSettings: (settings: Omit<ProviderSettings, 'providers'> & { openai_api_key?: string; gemini_api_key?: string }) =>
+    request<ProviderSettings>('/settings/providers', { method: 'PUT', body: JSON.stringify(settings) }),
+  resetProviderSettings: () => request<ProviderSettings>('/settings/providers', { method: 'DELETE' }),
+  testProvider: (provider: AIProvider) => request<{ message: string }>(`/settings/providers/${provider}/test`, { method: 'POST' }),
+  removeToken: () => request<SettingsStatus>('/settings', { method: 'DELETE' }),
   getWebDiscoveries: (signal?: AbortSignal) => request<WebDiscoveryResults>('/contributions/web', { signal }),
   getContributionConfig: (signal?: AbortSignal) => request<ContributionConfig>('/contributions/config', { signal }),
   searchContributions: (options: DiscoveryOptions, page = 1, signal?: AbortSignal) =>
     request<DiscoveryResults>(
-      `/contributions/search?${new URLSearchParams({ ...options, beginner: String(options.beginner), page: String(page) })}`, { signal }),
+      `/contributions/search?${new URLSearchParams(Object.entries({ ...options, page }).filter(([, value]) => value !== undefined).map(([key, value]) => [key, String(value)]))}`, { signal }),
   analyzeContribution: (fullName: string, signal?: AbortSignal) =>
     request<ContributionAnalysis>(`/contributions/repos/${fullName.split('/').map(encodeURIComponent).join('/')}`, { signal }),
   getContributionAdvice: (fullName: string, skills: string, experience: string, provider: AIProvider, signal?: AbortSignal) =>

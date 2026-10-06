@@ -128,7 +128,7 @@ try {
     Wait-Service 'http://127.0.0.1:5173' $web 'Frontend'
 
     Write-Host "`nInformer is ready: http://127.0.0.1:5173"
-    Write-Host 'API: http://127.0.0.1:8000/docs | Adminer: http://localhost:8080'
+    Write-Host 'API health: http://127.0.0.1:8000/api/health | Adminer: http://localhost:8080'
     Write-Host "Logs: $logs"
     Write-Host 'Press Ctrl+C to stop the API and frontend. Docker services will keep running.'
     while ($true) {

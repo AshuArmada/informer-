@@ -9,7 +9,7 @@ services:
       POSTGRES_DB: informer
     ports:
       # Host port 5433 (not 5432) to avoid colliding with any native Postgres install.
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"
     volumes:
       - informer-db-data:/var/lib/postgresql/data
     healthcheck:
@@ -23,7 +23,7 @@ services:
     container_name: informer-adminer
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     depends_on:
       db:
         condition: service_healthy

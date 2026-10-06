@@ -12,7 +12,7 @@ class SettingsStatus(BaseModel):
 
 
 class SettingsUpdate(BaseModel):
-    github_token: str
+    github_token: str = Field(min_length=8, max_length=512, pattern=r"^\S+$")
 
 
 class TrendingRepo(BaseModel):
@@ -34,11 +34,18 @@ class TrendingResponse(BaseModel):
 
 
 class SavedRepo(BaseModel):
-    repo_full_name: str
+    repo_full_name: str = Field(max_length=140, pattern=r"^[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9_.-]{1,100}$")
     description: str | None
     language: str | None
     html_url: str
-    stars: int
+    stars: int = Field(ge=0)
+
+    @model_validator(mode="after")
+    def safe_repository_link(self):
+        if self.repo_full_name.split("/")[1] in (".", ".."):
+            raise ValueError("Invalid repository name.")
+        self.html_url = "https://github.com/" + self.repo_full_name
+        return self
 
 
 # --- Reports ---
@@ -56,8 +63,15 @@ class GitHubRepo(BaseModel):
 
 
 class TrackRepoRequest(BaseModel):
-    owner: str
-    name: str
+    owner: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9-]{0,38}$")
+    name: str = Field(pattern=r"^[A-Za-z0-9_.-]{1,100}$")
+
+    @field_validator("name")
+    @classmethod
+    def valid_name(cls, value):
+        if value in (".", ".."):
+            raise ValueError("Invalid repository name.")
+        return value
 
 
 class IssueItem(BaseModel):

@@ -2,6 +2,51 @@
 
 Open **Contribute**, the app's default view. Search a topic, select a programming language, and optionally require projects with good first issues. The page automatically loads a discovery feed. Search returns 12 public, non-archived, non-fork repositories per page, pushed in the last 90 days. Choose Active projects or New projects (also created in the last 90 days), and sort by recent updates or stars. Load more adds the next page using the applied filters, up to 300 matches. Refresh projects fetches the first page again. Cards show language, stars, topics, license, creation date, last push, and open issues plus PRs; the combined count is not an issue-only count. A good-first-issue badge appears when that discovery filter was applied. Rules and merge statistics load when opening project analysis. Enter `owner/repository` or a GitHub repository URL to inspect a specific project directly; discovery filters do not apply to direct inspection.
 
+## Repository categories and filters
+
+In GitHub search, **Refine your search** adds topic tags, arbitrary open-issue labels,
+unassigned issues, license, minimum stars, and last-push windows of 7/30/90/365 days.
+The default window remains 90 days; New projects always means created within 90 days.
+All selected filters combine. Search accepts plain text; use the controls for
+qualifiers. Quick starts reset filters to an issue category. Clicking a card's topic
+starts a fresh search for that tag. Draft filters persist for the browser session.
+
+Repository search returns up to 12 candidates at a time. Custom issue labels and
+assignment availability are verified through issue-only open-issue searches for each
+candidate, with at most three concurrent requests. The returned `total_count` is the
+candidate count **before** those issue filters. `scanned_count` records checked
+candidates and `matching_issues` on cards records matching open issues. A batch can
+have no matches even when more candidates remain. Filtered searches automatically
+check up to two batches (24 candidates) to find at least 12 matches, retaining all
+matches in the final batch. The good-first-issue label also narrows the initial
+repository search to projects with good first issues. Refilling stops on warnings
+or exhausted results. `page` is the last candidate page consumed; Load more resumes
+at `page + 1`, including after a failed refill. Pagination stays bounded to the
+first 300 repository candidates. Failed checks omit
+that candidate and return warnings, never fabricated counts. This uses additional
+GitHub search quota. Successful, complete GitHub search responses are reused for
+two minutes, scoped to the configured token, with at most 256 responses cached per
+token. Concurrent searches share these results and GitHub's quota state. An
+exhausted quota stops new upstream searches until GitHub's reset time; cached
+results remain usable. Failed or incomplete responses are not cached.
+
+If issue verification reaches the quota, verified projects remain visible and the
+response includes `retry_after` in seconds. A search blocked before any candidates
+are available returns HTTP 429 with `Retry-After`. The page shows a countdown and
+disables search, refresh, and load-more requests during that cooldown. Refresh
+after it ends to retry missing checks, reusing recent successful checks. Other
+issue-check failures include their HTTP status or transport error type in warnings
+and server logs. Restarting the backend clears its cache and quota state.
+
+**Group by** organizes only loaded matches by language, first topic tag, or license.
+It does not imply a complete inventory of that category across GitHub.
+
+Additional search parameters: `topic`, `license`, `min_stars`, `activity_days`,
+`issue_label`, and `unassigned`. Provider management uses GET/PUT/DELETE at
+`/api/settings/providers` and POST at `/api/settings/providers/{provider}/test`.
+`DELETE /api/settings` removes the GitHub token. All mutating requests require
+the protection headers described in [local application security](./security.md).
+
 ## Web discoveries
 
 Select **Web discoveries** on the Contribute page to browse a separate collection
@@ -41,7 +86,12 @@ service API key, environment changes, or database migration are needed.
 
 Start PostgreSQL and the backend as described in the README. Save and validate a GitHub PAT in Settings. Public repository analysis needs read access to metadata, issues, pull requests, and contents. Existing private-repository reports keep their own broader token requirements. Contribution discovery rejects private repositories.
 
-For AI guidance, configure providers in `backend/.env` and restart the backend:
+For AI guidance, use **Settings → AI connections** to save provider keys, models,
+timeout, and default selection. Settings take effect on new requests immediately.
+Keys stay encrypted on the server. Blank key inputs preserve the saved credential;
+the removal checkbox disables that provider, including environment fallback.
+Connection tests check credentials/connectivity without generating advice.
+Alternatively, set installation defaults in `backend/.env` and restart the backend:
 
 | Provider | Default selection | Required configuration | Default model |
 | --- | --- | --- | --- |
@@ -84,7 +134,7 @@ cd ../backend
 ./.venv/Scripts/python -m pytest tests/test_web_discovery.py tests/test_contributions.py tests/test_report_generator.py tests/test_security.py -q
 ```
 
-The full test suite also includes an application startup health check that requires the configured PostgreSQL database. All provider adapters are tested with mocked responses, including credentials isolation, missing configuration, truncation, and connection failure. Live cloud calls require working keys, model access, and quota. Live Ollama calls require a running server and a pulled model.
+The automated suite isolates health routing from startup jobs and does not need a running database. All provider adapters are tested with mocked responses, including credentials isolation, missing configuration, truncation, and connection failure. Live cloud calls require working keys, model access, and quota. Live Ollama calls require a running server and a pulled model.
 
 Web discovery tests cover source-specific HTML extraction, unsafe-link rejection,
 sample limits, deduplication, concurrent cache reuse, partial outages, stale-result
@@ -101,6 +151,14 @@ Provider references: [Ollama chat API](https://docs.ollama.com/api/chat) and [Ge
 
 Repository links (including links to issues or files within a repository) open that project's analysis. Its URL is retained in `#contribute?repo=...`, so reload, browser history, and saved-project links work. Topic/language/beginner search drafts persist for the browser session when visiting Settings. Filters apply to discovery searches, not direct repository inspection.
 
-Save/unsave buttons check bookmark status and display errors on failure. Saved cards link back to contribution analysis. Repository refresh and request retries fetch new evidence. Issue filters can be cleared together. AI configuration can be retried without reloading. Stop waiting cancels the browser's wait; it does not guarantee the AI provider stops processing or billing an already submitted request.
+Bookmark icons in the top-right corner of GitHub search and Web discoveries cards,
+and beside repository details, add bookmarks to **Saved**. Click a highlighted
+bookmark icon again to remove its bookmark.
+Bookmark status stays synchronized across discovery and detail views; failed loads
+and updates show retryable errors. Saved cards link back to contribution analysis.
+Repository refresh and request retries fetch new evidence. Issue filters can be
+cleared together. AI configuration can be retried without reloading. Stop waiting
+cancels the browser's wait; it does not guarantee the AI provider stops processing
+or billing an already submitted request.
 
 Flow audit covered discovery, URL parsing, saved-project navigation, save/unsave failure recovery, provider retry/switching/cancellation, browser history, issue filtering, and report setup/tracking error recovery using mocked browser API responses. Live GitHub issue search was also checked. Full database-backed application startup requires the configured PostgreSQL service.

@@ -1,18 +1,27 @@
 from __future__ import annotations
 
 import datetime as dt
+import json
+import logging
+
+import httpx
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, delete
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
 from app.github import GitHubClient
-from app.models import AppSettings
+from app.models import AppSettings, ProviderSettings
+from app.ai import Provider, provider_config
+from app.config import get_settings
+from app.provider_settings import ProviderUpdate, decode_overrides, effective_settings, public_settings
 from app.schemas import SettingsStatus, SettingsUpdate
 from app.security import encrypt_token, try_decrypt_token
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
+audit = logging.getLogger("informer.security")
 
 _VALID_PREFIXES = ("ghp_", "github_pat_", "gho_")
 
@@ -64,6 +73,7 @@ async def update_settings(body: SettingsUpdate, db: AsyncSession = Depends(get_d
     row.github_login = None
     row.token_updated_at = dt.datetime.now(dt.timezone.utc)
     await db.commit()
+    audit.warning("GitHub credential updated")
     return SettingsStatus(configured=True, valid=None, login=None, masked_hint=_mask(token))
 
 
@@ -88,3 +98,67 @@ async def validate_settings(db: AsyncSession = Depends(get_db)) -> SettingsStatu
     row.github_login = user.get("login")
     await db.commit()
     return SettingsStatus(configured=True, valid=True, login=row.github_login, masked_hint=_mask(token))
+
+
+@router.delete("", response_model=SettingsStatus)
+async def remove_token(db: AsyncSession = Depends(get_db)):
+    row = await _get_row(db)
+    if row:
+        row.github_token_encrypted = None
+        row.github_login = None
+        await db.commit()
+    audit.warning("GitHub credential removed")
+    return SettingsStatus(configured=False)
+
+
+@router.get("/providers")
+async def get_providers(settings=Depends(effective_settings)):
+    return public_settings(settings)
+
+
+@router.put("/providers")
+async def update_providers(body: ProviderUpdate, db: AsyncSession = Depends(get_db)):
+    await db.execute(insert(ProviderSettings).values(id=1, encrypted_payload=encrypt_token("{}"))
+                     .on_conflict_do_nothing(index_elements=["id"]))
+    row = (await db.execute(select(ProviderSettings).where(ProviderSettings.id == 1).with_for_update())).scalar_one()
+    overrides = decode_overrides(row)
+    values = body.model_dump(exclude={"openai_api_key", "gemini_api_key"})
+    for key in ("openai_api_key", "gemini_api_key"):
+        secret = getattr(body, key)
+        if secret is not None:
+            values[key] = secret.get_secret_value()
+    overrides.update(values)
+    row.encrypted_payload = encrypt_token(json.dumps(overrides))
+    await db.commit()
+    audit.warning("Provider configuration updated; fields=%s", ",".join(sorted(values)))
+    return public_settings(get_settings().model_copy(update=overrides))
+
+
+@router.delete("/providers")
+async def reset_providers(db: AsyncSession = Depends(get_db)):
+    await db.execute(delete(ProviderSettings).where(ProviderSettings.id == 1))
+    await db.commit()
+    audit.warning("Provider configuration reset to installation defaults")
+    return public_settings(get_settings())
+
+
+@router.post("/providers/{provider}/test")
+async def test_provider(provider: Provider, settings=Depends(effective_settings)):
+    if not provider_config(settings, provider)["configured"]:
+        raise HTTPException(400, "Save an API key for this provider first.")
+    headers = {}
+    if provider == "openai":
+        url = "https://api.openai.com/v1/models"
+        headers = {"Authorization": f"Bearer {settings.openai_api_key}"}
+    elif provider == "gemini":
+        url = "https://generativelanguage.googleapis.com/v1beta/models"
+        headers = {"x-goog-api-key": settings.gemini_api_key}
+    else:
+        url = settings.ollama_base_url.rstrip("/") + "/api/tags"
+    try:
+        async with httpx.AsyncClient(timeout=15, follow_redirects=False, trust_env=False) as client:
+            response = await client.get(url, headers=headers)
+            response.raise_for_status()
+        return {"message": "Connection succeeded. Credentials accepted; model access and generation quota are checked when you request advice."}
+    except httpx.HTTPError:
+        raise HTTPException(502, "Connection failed. Check the saved key and provider availability. For Ollama, start the local server.") from None

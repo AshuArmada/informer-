@@ -6,6 +6,9 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from app.http_security import LocalSecurityMiddleware
 
 from sqlalchemy import select
 
@@ -42,15 +45,24 @@ async def lifespan(app: FastAPI):
     await stop_scheduler()
 
 
-app = FastAPI(title="Informer API", lifespan=lifespan)
+app = FastAPI(title="Informer API", lifespan=lifespan, docs_url=None, redoc_url=None)
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_settings().cors_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "X-Informer-Request"],
 )
+app.add_middleware(LocalSecurityMiddleware)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error(request, exc):
+    # FastAPI normally echoes invalid inputs, including accidentally pasted keys.
+    return JSONResponse(status_code=422, content={"detail": [
+        {"loc": list(e["loc"]), "msg": e["msg"], "type": e["type"]} for e in exc.errors()
+    ]})
 
 app.include_router(settings_router.router)
 app.include_router(trending_router.router)

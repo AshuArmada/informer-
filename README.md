@@ -11,6 +11,26 @@ A personal, local-only AI assistant for finding open source contributions.
 
 Configure the GitHub PAT in **Settings** for repository search and analysis. Web discovery listings need no token or AI key; AI guidance supports local Ollama, Google Gemini, and OpenAI. See [Contribution discovery](./docs/contributions.md) for setup and metric definitions.
 
+**Repository filters:** refine GitHub discovery by topic tag, custom open-issue label,
+unassigned issues, language, license, minimum stars, and recent activity. Use quick
+starts for beginner issues, help wanted, bugs, or documentation. Group loaded
+projects by language, first topic tag, or license. Filtered searches automatically
+check up to two 12-project batches to fill sparse results; counts distinguish
+candidate repositories from verified matches. First contributions targets projects
+with good first issues before verifying their labels.
+Recent search results are cached for two minutes. If GitHub's search quota is
+exhausted, a countdown shows when to retry while verified projects stay visible.
+
+**API connections:** Settings now manages OpenAI/Gemini keys, all three AI models,
+the default provider, timeout, and local Ollama address. Save, replace, remove, and
+test connections without editing `.env` or restarting. Keys are encrypted in the
+database and never returned to the page. GitHub endpoints and cloud API hosts stay
+fixed to protect credentials. See [security controls and limits](./docs/security.md).
+
+Existing installations need the new provider-settings migration: the launcher runs
+it automatically, or run `./.venv/Scripts/python -m alembic upgrade head` from
+`backend`. No new packages are required.
+
 See [CLAUDE.md](./CLAUDE.md) for the full architecture and design decisions.
 
 ## Prerequisites
@@ -135,7 +155,7 @@ setup is needed in dev.
 In the app, go to **Settings** and paste a GitHub Personal Access Token. Both classic
 (`ghp_…`) and fine-grained (`github_pat_…`) tokens work.
 
-- **Classic PAT:** needs the `repo` scope.
+- **Classic PAT:** public discovery needs no broad `repo` scope; private reports need `repo` access.
 - **Fine-grained PAT:** needs read access to Metadata, Issues, Pull requests, and Contents,
   scoped to the repos/orgs you want reports for.
 
@@ -148,7 +168,10 @@ ever shows a masked hint (e.g. `ghp_••••1234`).
 
 ## 5. AI contribution guidance (optional)
 
-Select a default provider in `backend/.env`, then restart the backend. You can switch providers in the advisor before generating a plan.
+Open **Settings → AI connections** to choose a default provider, set models and keys,
+then save. New requests use the settings immediately. The advisor can override the
+provider for an individual request. The `.env` examples below are optional
+installation defaults; changes to those defaults require restarting the backend.
 
 **Local Ollama (no API key):**
 
